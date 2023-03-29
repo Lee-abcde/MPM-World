@@ -1,4 +1,5 @@
 import taichi as ti
+import taichi.math as tm
 ti.init(arch=ti.gpu)  # Try to run on GPU
 
 quality = 1  # Use a larger value for higher-res simulations
@@ -10,16 +11,15 @@ p_mass = p_vol * p_rho
 gravity = 9.8
 bound = 3 # boundary condition
 E, nu = 0.1e4, 0.2  # Young's modulus and Poisson's ratio
-mu_0, lambda_0 = E / (2 * (1 + nu)), E * nu / (
-    (1 + nu) * (1 - 2 * nu))  # Lame parameters
+mu_0, lambda_0 = E / (2 * (1 + nu)), E * nu / ((1 + nu) * (1 - 2 * nu))  # Lame parameters
 
 
-x = ti.Vector.field(2, dtype=float, shape=n_particles)  # position
-v = ti.Vector.field(2, dtype=float, shape=n_particles)  # velocity
-C = ti.Matrix.field(2, 2, dtype=float, shape=n_particles)  # affine velocity field
-F = ti.Matrix.field(2, 2, dtype=float, shape=n_particles)  # deformation gradient 为了模拟弹性，塑性材料需要记录这个物理信息
+x = ti.Vector.field(2, dtype=float, shape=n_particles)
+v = ti.Vector.field(2, dtype=float, shape=n_particles)
+C = ti.Matrix.field(2, 2, dtype=float, shape=n_particles)
+F = ti.Matrix.field(2, 2, dtype=float, shape=n_particles)  #为了模拟弹性和弹塑性，塑性材料需要记录这个物理信息
 material = ti.field(dtype=int, shape=n_particles)  # material id
-Jp = ti.field(dtype=float, shape=n_particles)  # plastic deformation： F的行列式？
+Jp = ti.field(dtype=float, shape=n_particles)  # plastic deformation: 记录塑性形变的部分F矩阵
 
 grid_v = ti.Vector.field(2, dtype=float,shape=(n_grid, n_grid))  # grid node momentum/velocity
 grid_m = ti.field(dtype=float, shape=(n_grid, n_grid))  # grid node mass
@@ -36,34 +36,35 @@ def substep():
         fx = x[p] * inv_dx - base.cast(float)
         w = [0.5 * (1.5 - fx)**2, 0.75 - (fx - 1)**2, 0.5 * (fx - 0.5)**2]
         F[p] = (ti.Matrix.identity(float, 2) + dt * C[p]) @ F[p] # F[p]: deformation gradient update (GAMES201 Lec8 P8)
-
-        h = ti.exp(10 * (1.0 - Jp[p])) # h: Hardening coefficient: snow gets harder when compressed
+        # handle lame parameters from different materials
+        h = ti.exp(10 * (1.0 - Jp[p]))  # h: Hardening coefficient: snow gets harder when compressed
         if material[p] == 1:  # jelly, make it softer
             h = 0.3
         mu, la = mu_0 * h, lambda_0 * h
         if material[p] == 0:  # liquid
             mu = 0.0
+
         U, sig, V = ti.svd(F[p])
-        J = 1.0
-        for d in ti.static(range(2)):
-            new_sig = sig[d, d]
-            if material[p] == 2:  # Snow
-                new_sig = ti.min(ti.max(sig[d, d], 1 - 2.5e-2),
-                                 1 + 4.5e-3)  # Plasticity
-            Jp[p] *= sig[d, d] / new_sig
-            sig[d, d] = new_sig
-            J *= new_sig
+        J = tm.determinant(F[p])
         if material[p] == 0:
-            # Reset deformation gradient to avoid numerical instability
-            F[p] = ti.Matrix.identity(float, 2) * ti.sqrt(J)
+            # F[p] = ti.Matrix.identity(float, 2) * ti.sqrt(J)
+            # F[p] = ti.Matrix.identity(float, 2) * ti.sqrt(F[p][0, 0] * F[p][1, 1])
+            F[p] = ti.Matrix.identity(float, 2) * ti.sqrt(J) # Reset deformation gradient to avoid numerical instability
         elif material[p] == 2:
+            J = 1
+            for d in ti.static(range(2)):
+                new_sig = sig[d, d]
+                if material[p] == 2:  # Snow
+                    new_sig = tm.clamp(sig[d, d], 1 - 2.5e-2, 1 + 4.5e-3)  # Plasticity Clamp Lec8 P22 Step3
+                Jp[p] *= sig[d, d] / new_sig
+                sig[d, d] = new_sig
+                J *= new_sig
             # Reconstruct elastic deformation gradient after plasticity
             F[p] = U @ sig @ V.transpose()
-        stress = 2 * mu * (F[p] - U @ V.transpose()) @ F[p].transpose(
-        ) + ti.Matrix.identity(float, 2) * la * J * (J - 1)
-        stress = (-dt * p_vol * 4 * inv_dx * inv_dx) * stress # Computing node force (GAMES201 Lec8 P11) 与（xi-xp)相乘是在循环中完成的
-        affine = stress + p_mass * C[p]
-        # Loop over 3x3 grid node neighborhood
+        # corotated model R = U * V^T
+        PK1_stress = 2 * mu * (F[p] - U @ V.transpose()) @ F[p].transpose() + ti.Matrix.identity(float, 2) * la * J * (J - 1) # calcuate Lec8 P11 (9) P*F^T 部分计算
+        stress = (- 4 * inv_dx * inv_dx * p_vol ) * PK1_stress # Computing node force (GAMES201 Lec8 P11) 与（xi-xp)相乘是在循环中完成的
+        affine = dt * stress + p_mass * C[p]
         for i, j in ti.static(ti.ndrange(3, 3)):
             offset = ti.Vector([i, j])
             dpos = (offset.cast(float) - fx) * dx
