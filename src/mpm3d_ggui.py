@@ -7,7 +7,7 @@ ti.init(arch=arch)
 
 #dim, n_grid, steps, dt = 2, 128, 20, 2e-4
 #dim, n_grid, steps, dt = 2, 256, 32, 1e-4
-#dim, n_grid, steps, dt = 3, 32, 25, 4e-4
+# dim, n_grid, steps, dt = 3, 32, 25, 4e-4
 dim, n_grid, steps, dt = 3, 64, 25, 2e-4
 #dim, n_grid, steps, dt = 3, 128, 5, 1e-4
 
@@ -62,8 +62,7 @@ def substep(g_x: float, g_y: float, g_z: float):
         fx = Xp - base
         w = [0.5 * (1.5 - fx)**2, 0.75 - (fx - 1)**2, 0.5 * (fx - 0.5)**2]
 
-        F_dg[p] = (ti.Matrix.identity(float, 3) +
-                   dt * F_C[p]) @ F_dg[p]  # deformation gradient update
+        F_dg[p] = (ti.Matrix.identity(float, 3) + dt * F_C[p]) @ F_dg[p]  # deformation gradient update
         # Hardening coefficient: snow gets harder when compressed
         h = ti.exp(10 * (1.0 - F_Jp[p]))
         if F_materials[p] == JELLY:  # jelly, make it softer
