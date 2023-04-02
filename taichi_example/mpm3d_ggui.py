@@ -230,7 +230,7 @@ curr_preset_id = 0
 paused = False
 
 use_random_colors = False
-particles_radius = 0.02
+particles_radius = 0.002
 
 material_colors = [(0.1, 0.6, 0.9), (0.93, 0.33, 0.23), (1.0, 1.0, 1.0)]
 
