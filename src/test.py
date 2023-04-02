@@ -7,8 +7,8 @@ ti.init(arch=arch)
 
 #dim, n_grid, steps, dt = 2, 128, 20, 2e-4
 #dim, n_grid, steps, dt = 2, 256, 32, 1e-4
-dim, n_grid, steps, dt = 3, 32, 25, 4e-4
-# dim, n_grid, steps, dt = 3, 64, 25, 2e-4
+# dim, n_grid, steps, dt = 3, 32, 25, 4e-4
+dim, n_grid, steps, dt = 3, 64, 25, 2e-4
 #dim, n_grid, steps, dt = 3, 128, 5, 1e-4
 
 n_particles = n_grid**dim // 2**(dim - 1)
@@ -128,65 +128,6 @@ def substep(g_x: float, g_y: float, g_z: float):
         F_x[p] += dt * F_v[p]
         F_C[p] = new_C
 
-
-class CubeVolume:
-    def __init__(self, minimum, size, material):
-        self.minimum = minimum
-        self.size = size
-        self.volume = self.size.x * self.size.y * self.size.z
-        self.material = material
-
-
-@ti.kernel
-def init_cube_vol(first_par: int, last_par: int, x_begin: float,
-                  y_begin: float, z_begin: float, x_size: float, y_size: float,
-                  z_size: float, material: int):
-    for i in range(first_par, last_par):
-        F_x[i] = ti.Vector([ti.random() for i in range(dim)]) * ti.Vector(
-            [x_size, y_size, z_size]) + ti.Vector([x_begin, y_begin, z_begin])
-        F_Jp[i] = 1
-        F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-        F_v[i] = ti.Vector([0.0, 0.0, 0.0])
-        F_materials[i] = material
-        F_colors_random[i] = ti.Vector(
-            [ti.random(), ti.random(),
-             ti.random(), ti.random()])
-
-
-@ti.kernel
-def init_vols():
-    group_size = n_particles // 3
-    for i in range(n_particles):
-        F_x[i] = [
-            ti.random() * 0.3 + 0.3 + 0.1 * (i // group_size),
-            ti.random() * 0.3 + 0.05 + 0.1 * (i // group_size),
-            ti.random() * 0.3 + 0.05 + 0.2 * (i // group_size)
-        ]
-        F_v[i] = ti.Vector([0, 0, 0])
-        F_C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
-        F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-        F_Jp[i] = 1
-        F_materials[i] = 0 # 0: fluid 1: jelly 2: snow
-    # total_vol = 0
-    # for v in vols:
-    #     total_vol += v.volume
-    #
-    # next_p = 0
-    # for i, v in enumerate(vols):
-    #     v = vols[i]
-    #     if isinstance(v, CubeVolume):
-    #         par_count = int(v.volume / total_vol * n_particles)
-    #         if i == len(
-    #                 vols
-    #         ) - 1:  # this is the last volume, so use all remaining particles
-    #             par_count = n_particles - next_p
-    #         init_cube_vol(next_p, next_p + par_count, *v.minimum, *v.size,
-    #                       v.material)
-    #         next_p += par_count
-    #     else:
-    #         raise Exception("???")
-
-
 @ti.kernel
 def set_color_by_material(mat_color: ti.types.ndarray()):
     for i in range(n_particles):
@@ -195,48 +136,28 @@ def set_color_by_material(mat_color: ti.types.ndarray()):
             [mat_color[mat, 0], mat_color[mat, 1], mat_color[mat, 2], 1.0])
 
 
-print("Loading presets...this might take a minute")
 
-presets = [[
-    CubeVolume(ti.Vector([0.55, 0.05, 0.55]), ti.Vector([0.4, 0.4, 0.4]),
-               WATER),
-],
-           [
-               CubeVolume(ti.Vector([0.05, 0.05, 0.05]),
-                          ti.Vector([0.3, 0.4, 0.3]), WATER),
-               CubeVolume(ti.Vector([0.65, 0.05, 0.65]),
-                          ti.Vector([0.3, 0.4, 0.3]), WATER),
-           ],
-           [
-               CubeVolume(ti.Vector([0.6, 0.05, 0.6]),
-                          ti.Vector([0.25, 0.25, 0.25]), SNOW),
-               CubeVolume(ti.Vector([0.35, 0.35, 0.35]),
-                          ti.Vector([0.25, 0.25, 0.25]), SNOW),
-               CubeVolume(ti.Vector([0.05, 0.6, 0.05]),
-                          ti.Vector([0.25, 0.25, 0.25]), SNOW),
-           ]]
-preset_names = [
-    "Single Dam Break",
-    "Double Dam Break",
-    "Water Snow Jelly",
-]
-
-curr_preset_id = 0
-
-paused = False
-
-use_random_colors = False
-particles_radius = 0.002
+particles_radius = 0.003
 
 material_colors = [(0.1, 0.6, 0.9), (0.93, 0.33, 0.23), (1.0, 1.0, 1.0)]
 
-
+@ti.kernel
 def init():
-    global paused
-    init_vols()
+    group_size = n_particles // 3
+    for i in range(n_particles):
+        F_x[i] = [
+            ti.random() * 0.3 + 0.3 + 0.1 * (i // group_size),
+            ti.random() * 0.3 + 0.05 + 0.32 * (i // group_size),
+            ti.random() * 0.25 + 0.05 + 0.32 * (i // group_size)
+        ]
+        F_v[i] = ti.Vector([0, 0, 0])
+        F_C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
+        F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        F_Jp[i] = 1
+        F_materials[i] = (i // group_size) # 0: fluid 1: jelly 2: snow
 
 
-init()
+
 
 res = (1080, 720)
 window = ti.ui.Window("Real MPM 3D", res, vsync=True)
@@ -251,54 +172,14 @@ camera.fov(55)
 
 
 def show_options():
-    global use_random_colors
-    global paused
-    global particles_radius
-    global curr_preset_id
-
-    with gui.sub_window("Presets", 0.05, 0.1, 0.2, 0.15) as w:
-        old_preset = curr_preset_id
-        for i in range(len(presets)):
-            if w.checkbox(preset_names[i], curr_preset_id == i):
-                curr_preset_id = i
-        if curr_preset_id != old_preset:
-            init()
-            paused = True
-
-    with gui.sub_window("Gravity", 0.05, 0.3, 0.2, 0.1) as w:
-        GRAVITY[0] = w.slider_float("x", GRAVITY[0], -10, 10)
-        GRAVITY[1] = w.slider_float("y", GRAVITY[1], -10, 10)
-        GRAVITY[2] = w.slider_float("z", GRAVITY[2], -10, 10)
-
-    with gui.sub_window("Options", 0.05, 0.45, 0.2, 0.4) as w:
-        use_random_colors = w.checkbox("use_random_colors", use_random_colors)
-        if not use_random_colors:
-            material_colors[WATER] = w.color_edit_3("water color",
-                                                    material_colors[WATER])
-            material_colors[SNOW] = w.color_edit_3("snow color",
-                                                   material_colors[SNOW])
-            material_colors[JELLY] = w.color_edit_3("jelly color",
-                                                    material_colors[JELLY])
-            set_color_by_material(np.array(material_colors, dtype=np.float32))
-        particles_radius = w.slider_float("particles radius ",
-                                          particles_radius, 0, 0.1)
-        if w.button("restart"):
-            init()
-        if paused:
-            if w.button("Continue"):
-                paused = False
-        else:
-            if w.button("Pause"):
-                paused = True
-
-
+        set_color_by_material(np.array(material_colors, dtype=np.float32))
 def render():
     camera.track_user_inputs(window, movement_speed=0.03, hold_key=ti.ui.RMB)
     scene.set_camera(camera)
 
     scene.ambient_light((0, 0, 0))
 
-    colors_used = F_colors_random if use_random_colors else F_colors
+    colors_used = F_colors
     scene.particles(F_x, per_vertex_color=colors_used, radius=particles_radius)
 
     scene.point_light(pos=(0.5, 1.5, 0.5), color=(0.5, 0.5, 0.5))
@@ -308,19 +189,12 @@ def render():
 
 
 def main():
-    frame_id = 0
-
+    init()
+    show_options()
     while window.running:
-        #print("heyyy ",frame_id)
-        frame_id += 1
-        frame_id = frame_id % 256
-
-        if not paused:
-            for _ in range(steps):
-                substep(*GRAVITY)
-
+        for _ in range(steps):
+            substep(*GRAVITY)
         render()
-        show_options()
         window.show()
 
 
