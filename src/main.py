@@ -7,14 +7,14 @@ ti.init(arch=ti.gpu)
 # set simulation parameters
 ##################################
 quality = 1
-n_particles,n_grid = 9000 * quality**2, 128 * quality
+n_particles, n_grid = 40000 * quality ** 2, 128 * quality
 dx, inv_dx = 1 / n_grid, float(n_grid)
 dt = 1e-4 / quality
 p_vol, p_rho = (dx * 0.5)**2, 1
 p_mass = p_vol * p_rho
 gravity = [0, -9.8, 0]
 bound = 3 # boundary condition
-E, nu = 1.e3, 0.2  # Young's modulus and Poisson's ratio
+E, nu = 1000, 0.2  # Young's modulus and Poisson's ratio
 mu_0, lambda_0 = E / (2 * (1 + nu)), E * nu / ((1 + nu) * (1 - 2 * nu))  # Lame parameters
 
 WATER = 0
@@ -68,7 +68,19 @@ def init_sim(): # init simulation parameters
         C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
         F[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         Jp[i] = 1
-        Material[i] = i // group_size  # 0: fluid 1: jelly 2: snow
+        Material[i] = 1 # 0: fluid 1: jelly 2: snow
+    # group_size = n_particles // 3
+    # for i in range(n_particles):
+    #     F_x[i] = [
+    #         ti.random() * 0.2 + 0.3 + 0.1 * (i // group_size),
+    #         ti.random() * 0.2 + 0.05 + 0.32 * (i // group_size),
+    #         ti.random() * 0.2 + 0.05 + 0.32 * (i // group_size)
+    #     ]
+    #     F_v[i] = ti.Vector([0, 0, 0])
+    #     F_C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
+    #     F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    #     F_Jp[i] = 1
+    #     F_materials[i] = (i // group_size) # 0: fluid 1: jelly 2: snow
 
 @ti.kernel
 def init_material(mat_color: ti.types.ndarray()):
@@ -81,10 +93,11 @@ def substep():
     for i in ti.grouped(grid_m): # clear grid info
         grid_m[i] = 0
         grid_v[i] = ti.zero(grid_v[i])
+
     for p in X: # particle in cell
-        Xp = X[p] * inv_dx
-        base = (Xp - 0.5).cast(int)
-        fx = Xp - base
+        xp = X[p] * inv_dx
+        base = (xp - 0.5).cast(int)
+        fx = xp - base
         w = [0.5 * (1.5 - fx)**2, 0.75 - (fx - 1)**2, 0.5 * (fx - 0.5)**2]
 
         F[p] = (ti.Matrix.identity(float, 3) + dt * C[p]) @ F[p]  # F[p]: deformation gradient update (GAMES201 Lec8 P8)
@@ -95,7 +108,7 @@ def substep():
         if Material[p] == WATER:  # liquid
             mu = 0.0
 
-        U_matrix , sig, V_matrix = ti.svd(F[p])
+        U_svd, sig, V_svd = ti.svd(F[p])
         J = 1.0
         for d in ti.static(range(3)):
             new_sig = sig[d, d]
@@ -112,8 +125,8 @@ def substep():
             F[p] = new_F
         elif Material[p] == SNOW:
             # Reconstruct elastic deformation gradient after plasticity
-            F[p] = U_matrix @ sig @ V_matrix.transpose()
-        stress = 2 * mu * (F[p] - U_matrix @ V_matrix.transpose()) @ F[p].transpose(
+            F[p] = U_svd @ sig @ V_svd.transpose()
+        stress = 2 * mu * (F[p] - U_svd @ V_svd.transpose()) @ F[p].transpose(
         ) + ti.Matrix.identity(float, 3) * la * J * (J - 1)
         stress = (-dt * p_vol * 4) * stress / dx**2
         affine = stress + p_mass * C[p]
@@ -158,7 +171,6 @@ def render():
     scene.set_camera(camera)
 
     scene.ambient_light((0, 0, 0))
-
 
     scene.particles(X, per_vertex_color=Particle_colors, radius=particles_radius)
 

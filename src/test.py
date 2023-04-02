@@ -39,7 +39,7 @@ F_colors_random = ti.Vector.field(4, float, n_particles)
 F_materials = ti.field(int, n_particles)
 F_grid_v = ti.Vector.field(dim, float, (n_grid, ) * dim)
 F_grid_m = ti.field(float, (n_grid, ) * dim)
-F_used = ti.field(int, n_particles)
+
 
 neighbour = (3, ) * dim
 
@@ -55,8 +55,6 @@ def substep(g_x: float, g_y: float, g_z: float):
         F_grid_m[I] = 0
     ti.loop_config(block_dim=n_grid)
     for p in F_x:
-        if F_used[p] == 0:
-            continue
         Xp = F_x[p] / dx
         base = int(Xp - 0.5)
         fx = Xp - base
@@ -112,8 +110,6 @@ def substep(g_x: float, g_y: float, g_z: float):
         F_grid_v[I] = ti.select(cond, 0, F_grid_v[I])
     ti.loop_config(block_dim=n_grid)
     for p in F_x:
-        if F_used[p] == 0:
-            continue
         Xp = F_x[p] / dx
         base = int(Xp - 0.5)
         fx = Xp - base
@@ -155,41 +151,40 @@ def init_cube_vol(first_par: int, last_par: int, x_begin: float,
         F_colors_random[i] = ti.Vector(
             [ti.random(), ti.random(),
              ti.random(), ti.random()])
-        F_used[i] = 1
 
 
 @ti.kernel
-def set_all_unused():
-    for p in F_used:
-        F_used[p] = 0
-        # basically throw them away so they aren't rendered
-        F_x[p] = ti.Vector([533799.0, 533799.0, 533799.0])
-        F_Jp[p] = 1
-        F_dg[p] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-        F_C[p] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
-        F_v[p] = ti.Vector([0.0, 0.0, 0.0])
-
-
-def init_vols(vols):
-    set_all_unused()
-    total_vol = 0
-    for v in vols:
-        total_vol += v.volume
-
-    next_p = 0
-    for i, v in enumerate(vols):
-        v = vols[i]
-        if isinstance(v, CubeVolume):
-            par_count = int(v.volume / total_vol * n_particles)
-            if i == len(
-                    vols
-            ) - 1:  # this is the last volume, so use all remaining particles
-                par_count = n_particles - next_p
-            init_cube_vol(next_p, next_p + par_count, *v.minimum, *v.size,
-                          v.material)
-            next_p += par_count
-        else:
-            raise Exception("???")
+def init_vols():
+    group_size = n_particles // 3
+    for i in range(n_particles):
+        F_x[i] = [
+            ti.random() * 0.3 + 0.3 + 0.1 * (i // group_size),
+            ti.random() * 0.3 + 0.05 + 0.1 * (i // group_size),
+            ti.random() * 0.3 + 0.05 + 0.2 * (i // group_size)
+        ]
+        F_v[i] = ti.Vector([0, 0, 0])
+        F_C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
+        F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        F_Jp[i] = 1
+        F_materials[i] = 0 # 0: fluid 1: jelly 2: snow
+    # total_vol = 0
+    # for v in vols:
+    #     total_vol += v.volume
+    #
+    # next_p = 0
+    # for i, v in enumerate(vols):
+    #     v = vols[i]
+    #     if isinstance(v, CubeVolume):
+    #         par_count = int(v.volume / total_vol * n_particles)
+    #         if i == len(
+    #                 vols
+    #         ) - 1:  # this is the last volume, so use all remaining particles
+    #             par_count = n_particles - next_p
+    #         init_cube_vol(next_p, next_p + par_count, *v.minimum, *v.size,
+    #                       v.material)
+    #         next_p += par_count
+    #     else:
+    #         raise Exception("???")
 
 
 @ti.kernel
@@ -214,11 +209,11 @@ presets = [[
            ],
            [
                CubeVolume(ti.Vector([0.6, 0.05, 0.6]),
-                          ti.Vector([0.25, 0.25, 0.25]), WATER),
+                          ti.Vector([0.25, 0.25, 0.25]), SNOW),
                CubeVolume(ti.Vector([0.35, 0.35, 0.35]),
                           ti.Vector([0.25, 0.25, 0.25]), SNOW),
                CubeVolume(ti.Vector([0.05, 0.6, 0.05]),
-                          ti.Vector([0.25, 0.25, 0.25]), JELLY),
+                          ti.Vector([0.25, 0.25, 0.25]), SNOW),
            ]]
 preset_names = [
     "Single Dam Break",
@@ -238,7 +233,7 @@ material_colors = [(0.1, 0.6, 0.9), (0.93, 0.33, 0.23), (1.0, 1.0, 1.0)]
 
 def init():
     global paused
-    init_vols(presets[curr_preset_id])
+    init_vols()
 
 
 init()
