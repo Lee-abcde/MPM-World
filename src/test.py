@@ -9,7 +9,7 @@ ti.init(arch=arch)
 #dim, n_grid, steps, dt = 2, 256, 32, 1e-4
 # dim, n_grid, steps, dt = 3, 32, 25, 4e-4
 dim, n_grid, steps, dt = 3, 64, 25, 2e-4
-#dim, n_grid, steps, dt = 3, 128, 5, 1e-4
+# dim, n_grid, steps, dt = 3, 128, 5, 1e-4
 
 n_particles = n_grid**dim // 2**(dim - 1)
 
@@ -146,9 +146,9 @@ def init():
     group_size = n_particles // 3
     for i in range(n_particles):
         F_x[i] = [
-            ti.random() * 0.3 + 0.3 + 0.1 * (i // group_size),
+            ti.random() * 0.35 + 0.3 + 0.1 * (i // group_size),
             ti.random() * 0.3 + 0.05 + 0.32 * (i // group_size),
-            ti.random() * 0.25 + 0.05 + 0.32 * (i // group_size)
+            ti.random() * 0.3 + 0.05 + 0.32 * (i // group_size)
         ]
         F_v[i] = ti.Vector([0, 0, 0])
         F_C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
