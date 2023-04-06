@@ -69,11 +69,8 @@ def substep():
         if F_materials[p] == JELLY:  # jelly, make it softer
             h = 0.3
         mu, la = mu_0 * h, lambda_0 * h
-        if F_materials[p] == WATER:  # liquid
+        if F_materials[p] == WATER or F_materials[p] == SMOKE:  # liquid or smoke
             mu = 0.0
-        elif F_materials[p] == SMOKE:
-            mu = 0.0
-            la = lambda_0
 
         U, sig, V = ti.svd(F_dg[p])
         J = 1.0
@@ -136,10 +133,13 @@ def substep():
             new_C += 4 * weight * g_v.outer_product(dpos) / dx**2
         F_v[p] = new_v
         if F_materials[p] == SMOKE:
-            Buoyancy = ALPHA * density - BETA * (F_t[p] - T_AMBIENT)
-            F_v[p] -= dt * ti.Vector([0, Buoyancy, 0])
-            F_v[p][1] = ti.max(F_v[p][1], -1)
-        F_x[p] += dt * F_v[p]
+            buoyancy = ti.max((0. * ALPHA * density - BETA * (F_t[p] - T_AMBIENT)),-19.8)
+            F_v[p] -= dt * (ti.Vector([0, buoyancy, 0]) + ti.Vector(GRAVITY))
+            if F_v[p][1] < 0:
+                F_v[p][1] *= 0.8
+            F_x[p] += dt * F_v[p]
+        else:
+            F_x[p] += dt * F_v[p]
         F_C[p] = new_C
 
 @ti.kernel
@@ -152,16 +152,16 @@ def set_color_by_material(mat_color: ti.types.ndarray()):
 
 particles_radius = 0.003
 
-material_colors = [(0.1, 0.6, 0.9), (0.93, 0.33, 0.23), (1.0, 1.0, 1.0),(0.5, 0.5, 0.5)]
+material_colors = [(0.1, 0.6, 0.9), (0.93, 0.33, 0.23), (1.0, 1.0, 1.0), (0.5, 0.5, 0.5)]
 
 @ti.kernel
 def init():
-    group_size = n_particles // 3
+    group_size = n_particles // 4
     for i in range(n_particles):
         F_x[i] = [
-            ti.random() * 0.35 + 0.3 + 0.1 * (i // group_size),
-            ti.random() * 0.3 + 0.05 + 0.32 * (i // group_size),
-            ti.random() * 0.3 + 0.05 + 0.32 * (i // group_size)
+            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size),
+            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size),
+            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size)
         ]
         F_v[i] = ti.Vector([0, 0, 0])
         F_C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
