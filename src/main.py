@@ -85,12 +85,8 @@ def substep():
             F_Jp[p] *= sig[d, d] / new_sig
             sig[d, d] = new_sig
             J *= new_sig
-        if F_materials[p] == WATER:
+        if F_materials[p] == WATER or F_materials[p] == SMOKE:
             # Reset deformation gradient to avoid numerical instability
-            new_F = ti.Matrix.identity(float, 3)
-            new_F[0, 0] = J
-            F_dg[p] = new_F
-        elif F_materials[p] == SMOKE:
             new_F = ti.Matrix.identity(float, 3)
             new_F[0, 0] = J
             F_dg[p] = new_F
@@ -140,10 +136,9 @@ def substep():
             new_C += 4 * weight * g_v.outer_product(dpos) / dx**2
         F_v[p] = new_v
         if F_materials[p] == SMOKE:
-            # Buoyancy = ALPHA * density - BETA * (F_t[p] - T_AMBIENT)
-            # F_v[p] -= dt * Buoyancy
-            F_v[p] -= 10 * dt * ti.Vector(GRAVITY)
-            F_v[p][1] = ti.max(F_v[p][1],-1)
+            Buoyancy = ALPHA * density - BETA * (F_t[p] - T_AMBIENT)
+            F_v[p] -= dt * ti.Vector([0, Buoyancy, 0])
+            F_v[p][1] = ti.max(F_v[p][1], -1)
         F_x[p] += dt * F_v[p]
         F_C[p] = new_C
 
@@ -153,7 +148,6 @@ def set_color_by_material(mat_color: ti.types.ndarray()):
         mat = F_materials[i]
         F_colors[i] = ti.Vector(
             [mat_color[mat, 0], mat_color[mat, 1], mat_color[mat, 2], 1.0])
-
 
 
 particles_radius = 0.003
