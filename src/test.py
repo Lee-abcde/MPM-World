@@ -46,7 +46,7 @@ neighbour = (3, ) * dim
 WATER = 0
 JELLY = 1
 SNOW = 2
-
+SMOKE = 3
 
 @ti.kernel
 def substep(g_x: float, g_y: float, g_z: float):
@@ -66,7 +66,7 @@ def substep(g_x: float, g_y: float, g_z: float):
         if F_materials[p] == JELLY:  # jelly, make it softer
             h = 0.3
         mu, la = mu_0 * h, lambda_0 * h
-        if F_materials[p] == WATER:  # liquid
+        if F_materials[p] == WATER or F_materials[p] == SMOKE:  # liquid
             mu = 0.0
 
         U, sig, V = ti.svd(F_dg[p])
@@ -79,7 +79,7 @@ def substep(g_x: float, g_y: float, g_z: float):
             F_Jp[p] *= sig[d, d] / new_sig
             sig[d, d] = new_sig
             J *= new_sig
-        if F_materials[p] == WATER:
+        if F_materials[p] == WATER or F_materials[p] == SMOKE:
             # Reset deformation gradient to avoid numerical instability
             new_F = ti.Matrix.identity(float, 3)
             new_F[0, 0] = J
@@ -125,6 +125,11 @@ def substep(g_x: float, g_y: float, g_z: float):
             new_v += weight * g_v
             new_C += 4 * weight * g_v.outer_product(dpos) / dx**2
         F_v[p] = new_v
+        if F_materials[p] == SMOKE:
+            buoyancy = -19.8
+            F_v[p] -= dt * (ti.Vector([0, buoyancy, 0]) + ti.Vector(GRAVITY))
+            if F_v[p][1] < 0:
+                F_v[p][1] *= 0.8
         F_x[p] += dt * F_v[p]
         F_C[p] = new_C
 
@@ -139,22 +144,22 @@ def set_color_by_material(mat_color: ti.types.ndarray()):
 
 particles_radius = 0.003
 
-material_colors = [(0.1, 0.6, 0.9), (0.93, 0.33, 0.23), (1.0, 1.0, 1.0)]
+material_colors = [(0.1, 0.6, 0.9), (0.93, 0.33, 0.23), (1.0, 1.0, 1.0), (0.5, 0.5, 0.5)]
 
 @ti.kernel
 def init():
-    group_size = n_particles // 3
+    group_size = n_particles // 4
     for i in range(n_particles):
         F_x[i] = [
-            ti.random() * 0.35 + 0.3 + 0.1 * (i // group_size),
-            ti.random() * 0.3 + 0.05 + 0.32 * (i // group_size),
-            ti.random() * 0.3 + 0.05 + 0.32 * (i // group_size)
+            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size),
+            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size),
+            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size)
         ]
         F_v[i] = ti.Vector([0, 0, 0])
         F_C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
         F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         F_Jp[i] = 1
-        F_materials[i] = (i // group_size) # 0: fluid 1: jelly 2: snow
+        F_materials[i] = (i // group_size) # 0: fluid 1: jelly 2: snow 3:smoke
 
 
 

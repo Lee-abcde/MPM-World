@@ -1,5 +1,4 @@
 import numpy as np
-
 import taichi as ti
 
 ti.init(arch=ti.cuda)
@@ -26,15 +25,12 @@ nu = 0.2  #  Poisson's ratio
 mu_0, lambda_0 = E / (2 * (1 + nu)), E * nu / (
     (1 + nu) * (1 - 2 * nu))  # Lame parameters
 
-T_AMBIENT, T_CENTER, ALPHA, BETA = 50.0, 55.0, 9.8, 15.0 # buoyancy
-
 F_x = ti.Vector.field(dim, float, n_particles)
 F_v = ti.Vector.field(dim, float, n_particles)
 F_C = ti.Matrix.field(dim, dim, float, n_particles)
 F_dg = ti.Matrix.field(3, 3, dtype=float,
                        shape=n_particles)  # deformation gradient
 F_Jp = ti.field(float, n_particles)
-F_t = ti.field(float, n_particles)  # smoke temperature
 
 F_colors = ti.Vector.field(4, float, n_particles)
 F_colors_random = ti.Vector.field(4, float, n_particles)
@@ -51,11 +47,10 @@ SNOW = 2
 SMOKE = 3
 
 @ti.kernel
-def substep():
+def substep(g_x: float, g_y: float, g_z: float):
     for I in ti.grouped(F_grid_m):
         F_grid_v[I] = ti.zero(F_grid_v[I])
         F_grid_m[I] = 0
-
     ti.loop_config(block_dim=n_grid)
     for p in F_x:
         Xp = F_x[p] / dx
@@ -69,7 +64,7 @@ def substep():
         if F_materials[p] == JELLY:  # jelly, make it softer
             h = 0.3
         mu, la = mu_0 * h, lambda_0 * h
-        if F_materials[p] == WATER or F_materials[p] == SMOKE:  # liquid or smoke
+        if F_materials[p] == WATER:  # liquid or smoke
             mu = 0.0
 
         U, sig, V = ti.svd(F_dg[p])
@@ -82,7 +77,7 @@ def substep():
             F_Jp[p] *= sig[d, d] / new_sig
             sig[d, d] = new_sig
             J *= new_sig
-        if F_materials[p] == WATER or F_materials[p] == SMOKE:
+        if F_materials[p] == WATER:
             # Reset deformation gradient to avoid numerical instability
             new_F = ti.Matrix.identity(float, 3)
             new_F[0, 0] = J
@@ -107,11 +102,10 @@ def substep():
     for I in ti.grouped(F_grid_m):
         if F_grid_m[I] > 0:
             F_grid_v[I] /= F_grid_m[I]
-        F_grid_v[I] += dt * ti.Vector(GRAVITY)
+        F_grid_v[I] += dt * ti.Vector([g_x, g_y, g_z])
         cond = (I < bound) & (F_grid_v[I] < 0) | \
                (I > n_grid - bound) & (F_grid_v[I] > 0)
         F_grid_v[I] = ti.select(cond, 0, F_grid_v[I])
-
     ti.loop_config(block_dim=n_grid)
     for p in F_x:
         Xp = F_x[p] / dx
@@ -120,26 +114,25 @@ def substep():
         w = [0.5 * (1.5 - fx)**2, 0.75 - (fx - 1)**2, 0.5 * (fx - 0.5)**2]
         new_v = ti.zero(F_v[p])
         new_C = ti.zero(F_C[p])
-
-        density = 0.
+        # density = 0.
         for offset in ti.static(ti.grouped(ti.ndrange(*neighbour))):
             dpos = (offset - fx) * dx
             weight = 1.0
             for i in ti.static(range(dim)):
                 weight *= w[offset[i]][i]
             g_v = F_grid_v[base + offset]
-            density += F_grid_m[base + offset]
+            # density += F_grid_m[base + offset]
             new_v += weight * g_v
             new_C += 4 * weight * g_v.outer_product(dpos) / dx**2
         F_v[p] = new_v
-        if F_materials[p] == SMOKE:
-            buoyancy = ti.max((0. * ALPHA * density - BETA * (F_t[p] - T_AMBIENT)),-19.8)
-            F_v[p] -= dt * (ti.Vector([0, buoyancy, 0]) + ti.Vector(GRAVITY))
-            if F_v[p][1] < 0:
-                F_v[p][1] *= 0.8
-            F_x[p] += dt * F_v[p]
-        else:
-            F_x[p] += dt * F_v[p]
+        # if F_materials[p] == SMOKE:
+        #     buoyancy = ti.max((0. * ALPHA * density - BETA * (F_t[p] - T_AMBIENT)),-19.8)
+        #     F_v[p] -= dt * (ti.Vector([0, buoyancy, 0]) + ti.Vector(GRAVITY))
+        #     if F_v[p][1] < 0:
+        #         F_v[p][1] *= 0.8
+        #     F_x[p] += dt * F_v[p]
+        # else:
+        F_x[p] += dt * F_v[p]
         F_C[p] = new_C
 
 @ti.kernel
@@ -148,6 +141,7 @@ def set_color_by_material(mat_color: ti.types.ndarray()):
         mat = F_materials[i]
         F_colors[i] = ti.Vector(
             [mat_color[mat, 0], mat_color[mat, 1], mat_color[mat, 2], 1.0])
+
 
 
 particles_radius = 0.003
@@ -168,22 +162,8 @@ def init():
         F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         F_Jp[i] = 1
         F_materials[i] = (i // group_size) # 0: fluid 1: jelly 2: snow 3:smoke
-        F_t[i] = T_CENTER
 
-@ti.kernel
-def init_smoke():
-    for i in range(n_particles):
-        F_x[i] = [
-            ti.random() * 0.3 + 0.35,
-            ti.random() * 0.3 + 0.35,
-            ti.random() * 0.3 + 0.35
-        ]
-        F_v[i] = ti.Vector([0, 0, 0])
-        F_C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
-        F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-        F_Jp[i] = 1
-        F_materials[i] = 3 # 0: fluid 1: jelly 2: snow 3:smoke
-        F_t[i] = T_CENTER
+
 
 
 res = (1080, 720)
@@ -216,11 +196,11 @@ def render():
 
 
 def main():
-    init_smoke()
+    init()
     show_options()
     while window.running:
         for _ in range(steps):
-            substep()
+            substep(*GRAVITY)
         render()
         window.show()
 
