@@ -1,3 +1,5 @@
+# It's a buggy material point program, but I find it very interesting
+# @Lee-abcde 07/04/2023
 import numpy as np
 
 import taichi as ti
@@ -55,9 +57,6 @@ def substep(g_x: float, g_y: float, g_z: float):
     for I in ti.grouped(F_grid_m):
         F_grid_v[I] = ti.zero(F_grid_v[I])
         F_grid_m[I] = 0
-    for I in ti.grouped(S_grid_m):
-        S_grid_v[I] = ti.zero(F_grid_v[I])
-        S_grid_m[I] = 0
     ti.loop_config(block_dim=n_grid)
     for p in F_x:
         Xp = F_x[p] / dx
