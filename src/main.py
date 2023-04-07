@@ -1,7 +1,9 @@
 import numpy as np
+
 import taichi as ti
 
-ti.init(arch=ti.cuda)
+arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
+ti.init(arch=arch)
 
 #dim, n_grid, steps, dt = 2, 128, 20, 2e-4
 #dim, n_grid, steps, dt = 2, 256, 32, 1e-4
@@ -64,7 +66,7 @@ def substep(g_x: float, g_y: float, g_z: float):
         if F_materials[p] == JELLY:  # jelly, make it softer
             h = 0.3
         mu, la = mu_0 * h, lambda_0 * h
-        if F_materials[p] == WATER:  # liquid or smoke
+        if F_materials[p] == WATER or F_materials[p] == SMOKE:  # liquid
             mu = 0.0
 
         U, sig, V = ti.svd(F_dg[p])
@@ -77,7 +79,7 @@ def substep(g_x: float, g_y: float, g_z: float):
             F_Jp[p] *= sig[d, d] / new_sig
             sig[d, d] = new_sig
             J *= new_sig
-        if F_materials[p] == WATER:
+        if F_materials[p] == WATER or F_materials[p] == SMOKE:
             # Reset deformation gradient to avoid numerical instability
             new_F = ti.Matrix.identity(float, 3)
             new_F[0, 0] = J
@@ -114,24 +116,20 @@ def substep(g_x: float, g_y: float, g_z: float):
         w = [0.5 * (1.5 - fx)**2, 0.75 - (fx - 1)**2, 0.5 * (fx - 0.5)**2]
         new_v = ti.zero(F_v[p])
         new_C = ti.zero(F_C[p])
-        # density = 0.
         for offset in ti.static(ti.grouped(ti.ndrange(*neighbour))):
             dpos = (offset - fx) * dx
             weight = 1.0
             for i in ti.static(range(dim)):
                 weight *= w[offset[i]][i]
             g_v = F_grid_v[base + offset]
-            # density += F_grid_m[base + offset]
             new_v += weight * g_v
             new_C += 4 * weight * g_v.outer_product(dpos) / dx**2
         F_v[p] = new_v
-        # if F_materials[p] == SMOKE:
-        #     buoyancy = ti.max((0. * ALPHA * density - BETA * (F_t[p] - T_AMBIENT)),-19.8)
-        #     F_v[p] -= dt * (ti.Vector([0, buoyancy, 0]) + ti.Vector(GRAVITY))
-        #     if F_v[p][1] < 0:
-        #         F_v[p][1] *= 0.8
-        #     F_x[p] += dt * F_v[p]
-        # else:
+        if F_materials[p] == SMOKE:
+            buoyancy = -15.8
+            F_v[p] -= dt * (ti.Vector([0, buoyancy, 0]) + ti.Vector(GRAVITY))
+            if F_v[p][1] < 0:
+                F_v[p][1] *= 0.8
         F_x[p] += dt * F_v[p]
         F_C[p] = new_C
 
