@@ -3,6 +3,7 @@ import numpy as np
 
 import taichi as ti
 
+import material
 arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=arch)
 
@@ -43,6 +44,7 @@ F_grid_m = ti.field(float, (n_grid, ) * dim)
 
 S_grid_v = ti.Vector.field(dim, float, (n_grid, ) * dim)
 S_grid_m = ti.field(float, (n_grid, ) * dim)
+S_grid_c = ti.Vector.field(dim, float, (n_grid, ) * dim) # field storage curl
 
 neighbour = (3, ) * dim
 
@@ -140,6 +142,11 @@ def substep(g_x: float, g_y: float, g_z: float):
         S_grid_v[I] -= dt * ti.Vector([g_x, g_y, g_z])
         if S_grid_v[I][1] < 0:
             S_grid_v[I][1] *= 0.8
+
+    for I in ti.grouped(S_grid_m):
+        S_grid_c[I] = material.Curl_cal(I,S_grid_v)
+    for I in ti.grouped(S_grid_m):
+        S_grid_v[I] += dt * material.Vorticity_cal(I,S_grid_c)
         cond = (I < bound) & (S_grid_v[I] < 0) | \
                (I > n_grid - bound) & (S_grid_v[I] > 0)
         S_grid_v[I] = ti.select(cond, 0, S_grid_v[I])
