@@ -56,9 +56,9 @@ def substep(g_x: float, g_y: float, g_z: float):
     for I in ti.grouped(F_grid_m):
         F_grid_v[I] = ti.zero(F_grid_v[I])
         F_grid_m[I] = 0
-    for I in ti.grouped(S_grid_m):
         S_grid_v[I] = ti.zero(F_grid_v[I])
         S_grid_m[I] = 0
+    # Step1: Particle to grid (P2G)
     ti.loop_config(block_dim=n_grid)
     for p in F_x:
         Xp = F_x[p] / dx
@@ -107,6 +107,10 @@ def substep(g_x: float, g_y: float, g_z: float):
                 S_grid_v[base +
                          offset] += weight * (p_mass * F_v[p] + affine @ dpos)
                 S_grid_m[base + offset] += weight * p_mass
+                # 注释该部分代码实现单向的耦合，烟雾不会影响其他物质的运动
+                # F_grid_v[base +
+                #          offset] += weight * (p_mass * F_v[p] + affine @ dpos)
+                # F_grid_m[base + offset] += weight * p_mass
         else:
             for offset in ti.static(ti.grouped(ti.ndrange(*neighbour))):
                 dpos = (offset - fx) * dx
@@ -116,7 +120,12 @@ def substep(g_x: float, g_y: float, g_z: float):
                 F_grid_v[base +
                          offset] += weight * (p_mass * F_v[p] + affine @ dpos)
                 F_grid_m[base + offset] += weight * p_mass
+                # 注释掉下面两行会失去烟雾的耦合，速度会提升10fps
+                S_grid_v[base +
+                         offset] += weight * (p_mass * F_v[p] + affine @ dpos)
+                S_grid_m[base + offset] += weight * p_mass
 
+    # Step2: Grid operations
     for I in ti.grouped(F_grid_m):
         if F_grid_m[I] > 0:
             F_grid_v[I] /= F_grid_m[I]
@@ -134,7 +143,7 @@ def substep(g_x: float, g_y: float, g_z: float):
         cond = (I < bound) & (S_grid_v[I] < 0) | \
                (I > n_grid - bound) & (S_grid_v[I] > 0)
         S_grid_v[I] = ti.select(cond, 0, S_grid_v[I])
-
+    # Step3: Grid to particle (G2P)
     ti.loop_config(block_dim=n_grid)
     for p in F_x:
         Xp = F_x[p] / dx
@@ -162,11 +171,6 @@ def substep(g_x: float, g_y: float, g_z: float):
                 new_v += weight * g_v
                 new_C += 4 * weight * g_v.outer_product(dpos) / dx**2
         F_v[p] = new_v
-        # if F_materials[p] == SMOKE:
-        #     buoyancy = -15.8
-        #     F_v[p] -= dt * (ti.Vector([0, buoyancy, 0]) + ti.Vector(GRAVITY))
-        #     if F_v[p][1] < 0:
-        #         F_v[p][1] *= 0.8
         F_x[p] += dt * F_v[p]
         F_C[p] = new_C
 
