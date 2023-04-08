@@ -144,9 +144,9 @@ def substep(g_x: float, g_y: float, g_z: float):
             S_grid_v[I][1] *= 0.8
 
     for I in ti.grouped(S_grid_m):
-        S_grid_c[I] = material.Curl_cal(I,S_grid_v)
+        S_grid_c[I] = material.Curl_cal(I, S_grid_v)
     for I in ti.grouped(S_grid_m):
-        S_grid_v[I] += dt * material.Vorticity_cal(I,S_grid_c)
+        S_grid_v[I] += dt * material.Vorticity_cal(I, S_grid_c)
         cond = (I < bound) & (S_grid_v[I] < 0) | \
                (I > n_grid - bound) & (S_grid_v[I] > 0)
         S_grid_v[I] = ti.select(cond, 0, S_grid_v[I])

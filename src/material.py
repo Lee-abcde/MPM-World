@@ -5,46 +5,46 @@ import taichi.math as tm
 
 @ti.func
 def Curl_cal(pos, S_grid_v):
-    Vz_up = S_grid_v[[pos[0], pos[1] + 1, pos[2]]][2]
-    Vz_down = S_grid_v[[pos[0], pos[1] - 1, pos[2]]][2]
+    vz_up = S_grid_v[[pos[0], pos[1] + 1, pos[2]]][2]
+    vz_down = S_grid_v[[pos[0], pos[1] - 1, pos[2]]][2]
 
-    Vy_front = S_grid_v[[pos[0], pos[1], pos[2] + 1]][1]
-    Vy_back = S_grid_v[[pos[0], pos[1], pos[2] - 1]][1]
+    vy_front = S_grid_v[[pos[0], pos[1], pos[2] + 1]][1]
+    vy_back = S_grid_v[[pos[0], pos[1], pos[2] - 1]][1]
 
-    Vx_front = S_grid_v[[pos[0], pos[1], pos[2] + 1]][0]
-    Vx_back = S_grid_v[[pos[0], pos[1], pos[2] - 1]][0]
+    vx_front = S_grid_v[[pos[0], pos[1], pos[2] + 1]][0]
+    vx_back = S_grid_v[[pos[0], pos[1], pos[2] - 1]][0]
 
-    Vz_right = S_grid_v[[pos[0] + 1, pos[1], pos[2]]][2]
-    Vz_left = S_grid_v[[pos[0] - 1, pos[1], pos[2]]][2]
+    vz_right = S_grid_v[[pos[0] + 1, pos[1], pos[2]]][2]
+    vz_left = S_grid_v[[pos[0] - 1, pos[1], pos[2]]][2]
 
-    Vy_right = S_grid_v[[pos[0] + 1, pos[1], pos[2]]][1]
-    Vy_left = S_grid_v[[pos[0] - 1, pos[1], pos[2]]][1]
+    vy_right = S_grid_v[[pos[0] + 1, pos[1], pos[2]]][1]
+    vy_left = S_grid_v[[pos[0] - 1, pos[1], pos[2]]][1]
 
-    Vx_up = S_grid_v[[pos[0], pos[1] + 1, pos[2]]][0]
-    Vx_down = S_grid_v[[pos[0], pos[1] - 1, pos[2]]][0]
+    vx_up = S_grid_v[[pos[0], pos[1] + 1, pos[2]]][0]
+    vx_down = S_grid_v[[pos[0], pos[1] - 1, pos[2]]][0]
 
     dx = 1.
     curl = ti.Vector(
-        [(Vz_up - Vz_down) - (Vy_front - Vy_back),
-         (Vx_front - Vx_back) - (Vz_right - Vz_left),
-         (Vy_right - Vy_left) - (Vx_up - Vx_down)]
+        [(vz_up - vz_down) - (vy_front - vy_back),
+         (vx_front - vx_back) - (vz_right - vz_left),
+         (vy_right - vy_left) - (vx_up - vx_down)]
     ) / (2. * dx)
     return curl
 
 @ti.func
 def CurlGrad_cal(pos, S_grid_c):
-    S_right = tm.length(S_grid_c[[pos[0] + 1, pos[1], pos[2]]])
-    S_left = tm.length(S_grid_c[[pos[0] - 1, pos[1], pos[2]]])
+    s_right = tm.length(S_grid_c[[pos[0] + 1, pos[1], pos[2]]])
+    s_left = tm.length(S_grid_c[[pos[0] - 1, pos[1], pos[2]]])
 
-    S_up = tm.length(S_grid_c[[pos[0], pos[1] + 1, pos[2]]])
-    S_down = tm.length(S_grid_c[[pos[0], pos[1] - 1, pos[2]]])
+    s_up = tm.length(S_grid_c[[pos[0], pos[1] + 1, pos[2]]])
+    s_down = tm.length(S_grid_c[[pos[0], pos[1] - 1, pos[2]]])
 
-    S_front = tm.length(S_grid_c[[pos[0], pos[1], pos[2] + 1]])
-    S_back = tm.length(S_grid_c[[pos[0], pos[1], pos[2] - 1]])
+    s_front = tm.length(S_grid_c[[pos[0], pos[1], pos[2] + 1]])
+    s_back = tm.length(S_grid_c[[pos[0], pos[1], pos[2] - 1]])
 
     dx = 1.
-    Grad = ti.Vector([S_right - S_left, S_up - S_down, S_front - S_back]) / (2.0 * dx)
-    return Grad
+    curlgrad = ti.Vector([s_right - s_left, s_up - s_down, s_front - s_back]) / (2.0 * dx)
+    return curlgrad
 
 @ti.func
 def Vorticity_cal(pos, S_grid_c):
