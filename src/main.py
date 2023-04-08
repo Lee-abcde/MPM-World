@@ -4,6 +4,7 @@ import numpy as np
 import taichi as ti
 
 import material
+import grid
 arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=arch)
 
@@ -132,9 +133,7 @@ def substep(g_x: float, g_y: float, g_z: float):
         if F_grid_m[I] > 0:
             F_grid_v[I] /= F_grid_m[I]
         F_grid_v[I] += dt * ti.Vector([g_x, g_y, g_z])
-        cond = (I < bound) & (F_grid_v[I] < 0) | \
-               (I > n_grid - bound) & (F_grid_v[I] > 0)
-        F_grid_v[I] = ti.select(cond, 0, F_grid_v[I])
+        grid.boundary_separate(I, F_grid_v, n_grid, bound)
 
     for I in ti.grouped(S_grid_m):
         if S_grid_m[I] > 0:
@@ -147,9 +146,7 @@ def substep(g_x: float, g_y: float, g_z: float):
         S_grid_c[I] = material.Curl_cal(I, S_grid_v)
     for I in ti.grouped(S_grid_m):
         S_grid_v[I] += dt * material.Vorticity_cal(I, S_grid_c)
-        cond = (I < bound) & (S_grid_v[I] < 0) | \
-               (I > n_grid - bound) & (S_grid_v[I] > 0)
-        S_grid_v[I] = ti.select(cond, 0, S_grid_v[I])
+        grid.boundary_separate(I, S_grid_v, n_grid, bound)
     # Step3: Grid to particle (G2P)
     ti.loop_config(block_dim=n_grid)
     for p in F_x:

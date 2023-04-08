@@ -7,7 +7,7 @@ MPM-World is an open-source fluid engine for the physically-based simulation of 
 
 #### To do list:
 
-* 更新一种含有摩擦系数的边界条件，使得弹性体不会跳来跳去 （高优先级）
+* ~~更新一种含有摩擦系数的边界条件，使得弹性体不会跳来跳去 （高优先级）~~（finished 08/04/2023)
 * ~~修复旋度运算网格位置不对可能导致的流体不稳定（高优先级）~~
 * 优化烟雾耦合部分的计算（中优先级）
 * ~~烟雾模拟长时间会发生渗漏问题，水体模拟长时间会退出（中优先级）~~ （finished 07/04/2023)
