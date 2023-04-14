@@ -90,6 +90,17 @@ def substep():
         #     continue
         fx = x_s[p] * inv_dx - base.cast(float)
         w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1) ** 2, 0.5 * (fx - 0.5) ** 2]
+
+        F_s[p] = (ti.Matrix.identity(float, 2) + dt * C_s[p]) @ F_s[p]
+
+        U, sig, V = ti.svd(F_s[p])
+        e = ti.Matrix([[ti.log(sig[0, 0]), 0], [0, ti.log(sig[1, 1])]])
+        new_e, dq = project(e, p)
+        hardening(dq, p)
+        new_F = U @ ti.Matrix([[ti.exp(new_e[0, 0]), 0], [0, ti.exp(new_e[1, 1])]]) @ V.transpose()
+        vc_s[p] += -ti.log(new_F.determinant()) + ti.log(F_s[p].determinant()) # formula (26)
+        F_s[p] = new_F
+
         U, sig, V = ti.svd(F_s[p])
         inv_sig = sig.inverse()
         e = ti.Matrix([[ti.log(sig[0, 0]), 0], [0, ti.log(sig[1, 1])]])
@@ -143,18 +154,10 @@ def substep():
             weight = w[i][0] * w[j][1]
             new_v += weight * g_v
             new_C += 4 * inv_dx * weight * g_v.outer_product(dpos)
-
-        F_s[p] = (ti.Matrix.identity(float, 2) + dt * new_C) @ F_s[p]
         v_s[p], C_s[p] = new_v, new_C
         x_s[p] += dt * v_s[p]
 
-        U, sig, V = ti.svd(F_s[p])
-        e = ti.Matrix([[ti.log(sig[0, 0]), 0], [0, ti.log(sig[1, 1])]])
-        new_e, dq = project(e, p)
-        hardening(dq, p)
-        new_F = U @ ti.Matrix([[ti.exp(new_e[0, 0]), 0], [0, ti.exp(new_e[1, 1])]]) @ V.transpose()
-        vc_s[p] += -ti.log(new_F.determinant()) + ti.log(F_s[p].determinant()) # formula (26)
-        F_s[p] = new_F
+
 
 @ti.kernel
 def initialize():
