@@ -164,6 +164,8 @@ def substep(g_x: float, g_y: float, g_z: float):
                     weight *= w[offset[i]][i]
                 g_v = S_grid_v[base + offset]
                 new_v += weight * g_v
+                # 通过计算 B * (D)-1 得到新的C矩阵
+                # B:affine momentum D:affine inertia tensor (APIC) C:particle velocity derivative (APIC)
                 new_C += 4 * weight * g_v.outer_product(dpos) / dx**2
         else:
             for offset in ti.static(ti.grouped(ti.ndrange(*neighbour))):

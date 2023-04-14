@@ -1,7 +1,7 @@
 import taichi as ti
 import numpy as np
-import time
-ti.init(arch=ti.gpu)
+
+ti.init(arch=ti.vulkan)
 
 quality = 1
 n_particles = 20000 * quality ** 2
@@ -11,7 +11,7 @@ n_grid = 128 * quality
 dx, inv_dx = 1 / n_grid, float(n_grid)
 dt = 2e-4 / quality
 gravity = ti.Vector([0, -9.8])
-d = 2
+d = 2 # 没懂d是干什么的
 
 # sand particle properties
 x_s = ti.Vector.field(2, dtype = float, shape = n_particles) # position

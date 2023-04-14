@@ -1,7 +1,7 @@
 import taichi as ti
 import numpy as np
 import time
-ti.init(arch=ti.cpu)
+ti.init(arch=ti.gpu)
 
 quality = 1
 n_particles = 20000 * quality ** 3
