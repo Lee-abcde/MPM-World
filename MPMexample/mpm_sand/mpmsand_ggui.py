@@ -274,16 +274,10 @@ def initialize():
         c_C0[i] = -0.01
         alpha_s[i] = 0.267765
     for i in x_w:
-        # x_w[i] = [ti.random() * 0.25 + 0.4, ti.random() * 0.4 + 0.01]
-        # v_w[i] = ti.Matrix([0, 0])
         J_w[i] = 1
 
-    pos_y[None] = 0.5
     n_w_particles[None] = 0
 
-pos_y = ti.field(dtype = float, shape = ())
-
-# add a new sand block with mouse position
 @ti.kernel
 def add_block(x : ti.f32):
     if n_s_particles[None] < 40000 - 1000:
@@ -296,32 +290,13 @@ def add_block(x : ti.f32):
 
     n_s_particles[None] += 1000
 
-@ti.func
-def color_lerp(r1, g1, b1, r2, g2, b2, t):
-    return int((r1 * (1 - t) + r2 * t) * 0x100) * 0x10000 + int((g1 * (1 - t) + g2 * t) * 0x100) * 0x100 + int((b1 * (1 - t) + b2 * t) * 0x100)
-
-# show different color for different cohesion of sand and different velocity of water
-color_s = ti.field(dtype = int, shape = n_particles)
-color_w = ti.field(dtype = int, shape = n_particles)
-@ti.kernel
-def update_color():
-    # for i in range(n_s_particles):
-    for i in color_s:
-        color_s[i] = color_lerp(0.521, 0.368, 0.259, 0.318, 0.223, 0.157, phi_s[i])
-    # for i in range(n_w_particles):
-    for i in color_w:
-        color_w[i] = color_lerp(0.2, 0.231, 0.792, 0.867, 0.886, 0.886, v_w[i].norm() / 7.0)
-
 initialize()
-
-gui = ti.GUI("2D Dam", res = (512,512), background_color = 0xFFFFFF)
-
-while True:
+window = ti.ui.Window('Window Title', res = (512, 512), pos = (150, 150))
+canvas = window.get_canvas()
+while window.running:
     for s in range(50):
         substep()
 
-    update_color()
-    gui.circles(x_w.to_numpy(), radius = 1.5, color = color_w.to_numpy())
-    gui.circles(x_s.to_numpy(), radius = 1.5, color = color_s.to_numpy())
-    # gui.show(f'{frame:06d}.png')
-    gui.show()
+    canvas.set_background_color((1., 1., 1.))
+    canvas.circles(x_s, radius=0.002, color=(0.4, 0.3, 0.2))
+    window.show()
