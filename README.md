@@ -8,6 +8,7 @@ MPM-World is an open-source MPM engine for the physically-based simulation of fl
 * ~~更新一种含有摩擦系数的边界条件，使得弹性体不会跳来跳去 （高优先级）~~（finished 08/04/2023) solution： 使用separate边界即可，不需要添加额外摩擦力
 * ~~修复旋度运算网格位置不对可能导致的流体不稳定（高优先级）~~
 * 学习并实现沙子的仿真（高优先级）
+* 整合加入拉格朗日力的解算
 * 实现水体烟雾的压强projection （高优先级）
 * 跑benchmark进行结果分析（高优先级）
 * 粒子渲染（高优先级）
