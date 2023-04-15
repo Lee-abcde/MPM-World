@@ -30,7 +30,6 @@ q_s = ti.field(dtype = float, shape = n_particles) # harding state
 # sand grid properties
 grid_sv = ti.Vector.field(2, dtype = float, shape = (n_grid, n_grid)) # grid node momentum/velocity
 grid_sm = ti.field(dtype = float, shape = (n_grid, n_grid)) # grid node mass
-grid_sf = ti.Vector.field(2, dtype = float, shape = (n_grid, n_grid)) # forces in the sand
 
 
 # constant values
@@ -81,7 +80,6 @@ def substep():
     for i, j in grid_sm:
         grid_sv[i, j] = [0, 0]
         grid_sm[i, j] = 0
-        grid_sf[i, j] = [0, 0]
 
     # P2G (sand's part)
     # for p in range(n_s_particles):
@@ -104,21 +102,19 @@ def substep():
         inv_sig = sig.inverse()
         pd_psi_F = U @ (2 * mu_s * inv_sig @ e + lambda_s * e.trace() * inv_sig) @ V.transpose() # 公式 (26)
         stress = (-p_vol * 4 * inv_dx * inv_dx) * pd_psi_F @ F_s[p].transpose() # 公式（23）
-        affine = s_mass * C_s[p]
+        affine = dt * stress + s_mass * C_s[p]
         for i, j in ti.static(ti.ndrange(3, 3)):
             offset = ti.Vector([i, j])
             dpos = (offset.cast(float) - fx) * dx
             weight = w[i][0] * w[j][1]
             grid_sv[base + offset] += weight * (s_mass * v_s[p] + affine @ dpos)
             grid_sm[base + offset] += weight * s_mass
-            grid_sf[base + offset] += weight * stress @ dpos
 
     # Update Grids Momentum
     for i, j in grid_sm:
         if grid_sm[i, j] > 0:
             grid_sv[i, j] = (1 / grid_sm[i, j]) * grid_sv[i, j] # Momentum to velocity
-
-        grid_sv[i, j] += dt * (gravity + grid_sf[i, j] / grid_sm[i, j]) # Update explicit force
+        grid_sv[i, j] += dt * gravity  # Update explicit force
 
         normal = ti.Vector.zero(float, 2)
         if grid_sm[i, j] > 0:
