@@ -1,3 +1,7 @@
+# 这是论文“Drucker-Prager Elastoplasticity for Sand Animation”的非官方的实现
+# written by @Lee-abcde
+# 代码部分借鉴自@g1n0st
+
 import taichi as ti
 
 ti.init(arch=ti.vulkan)
@@ -10,12 +14,12 @@ n_grid = 128 * quality
 dx, inv_dx = 1 / n_grid, float(n_grid)
 dt = 2e-4 / quality
 gravity = ti.Vector([0, -9.8])
-d = 2 # 没懂d是干什么的
+d = 2  # 这里表示dimension，在公式（27）下方写明了定义
 
 # sand particle properties
 x_s = ti.Vector.field(2, dtype = float, shape = n_particles) # position
 v_s = ti.Vector.field(2, dtype = float, shape = n_particles) # velocity
-C_s = ti.Matrix.field(2, 2, dtype = float, shape = n_particles) # affine velocity matrix
+C_s = ti.Matrix.field(2, 2, dtype = float, shape = n_particles) # particle velocity derivative，affine velocity matrix
 F_s = ti.Matrix.field(2, 2, dtype = float, shape = n_particles) # deformation gradient
 phi_s = ti.field(dtype = float, shape = n_particles) # cohesion and saturation
 c_C0 = ti.field(dtype = float, shape = n_particles) # initial cohesion (as maximum)
@@ -38,40 +42,38 @@ mu_s, lambda_s = E_s / (2 * (1 + nu_s)), E_s * nu_s / ((1 + nu_s) * (1 - 2 * nu_
 
 mu_b = 0.75 # coefficient of friction
 
-state = ti.field(dtype = int, shape = n_particles)
 pi = 3.14159265358979
 @ti.func
 def project(e0, p):
     e = e0 + vc_s[p] / d * ti.Matrix.identity(float, 2) # volume correction treatment
     e += (c_C0[p] * (1.0 - phi_s[p])) / (d * alpha_s[p]) * ti.Matrix.identity(float, 2) # effects of cohesion
-    ehat = e - e.trace() / d * ti.Matrix.identity(float, 2)
+
+    ehat = e - e.trace() / d * ti.Matrix.identity(float, 2)  # 公式（27）
     Fnorm = ti.sqrt(ehat[0, 0] ** 2 + ehat[1, 1] ** 2) # Frobenius norm
-    yp = Fnorm + (d * lambda_s + 2 * mu_s) / (2 * mu_s) * e.trace() * alpha_s[p] # delta gamma
+    yp = Fnorm + (d * lambda_s + 2 * mu_s) / (2 * mu_s) * e.trace() * alpha_s[p] # delta gamma 公式（27）
+
     new_e = ti.Matrix.zero(float, 2, 2)
     delta_q = 0.0
     if Fnorm <= 0 or e.trace() > 0: # Case II:
         new_e = ti.Matrix.zero(float, 2, 2)
         delta_q = ti.sqrt(e[0, 0] ** 2 + e[1, 1] ** 2)
-        state[p] = 0
     elif yp <= 0: # Case I:
         new_e = e0 # return initial matrix without volume correction and cohesive effect
         delta_q = 0
-        state[p] = 1
     else: # Case III:
         new_e = e - yp / Fnorm * ehat
         delta_q = yp
-        state[p] = 2
 
     return new_e, delta_q
 
 h0, h1, h2, h3 = 35, 9, 0.2, 10
 @ti.func
 def hardening(dq, p): # The amount of hardening depends on the amount of correction that occurred due to plasticity
-    q_s[p] += dq
-    phi = h0 + (h1 * q_s[p] - h3) * ti.exp(-h2 * q_s[p])
+    q_s[p] += dq  # 公式（29）
+    phi = h0 + (h1 * q_s[p] - h3) * ti.exp(-h2 * q_s[p]) # 公式（30）
     phi = phi / 180 * pi # details in Table. 3: Friction angle phi_F and hardening parameters h0, h1, and h3 are listed in degrees for convenience
     sin_phi = ti.sin(phi)
-    alpha_s[p] = ti.sqrt(2 / 3) * (2 * sin_phi) / (3 - sin_phi)
+    alpha_s[p] = ti.sqrt(2 / 3) * (2 * sin_phi) / (3 - sin_phi)  # 公式（31）
 
 @ti.kernel
 def substep():
@@ -85,29 +87,23 @@ def substep():
     # for p in range(n_s_particles):
     for p in x_s:
         base = (x_s[p] * inv_dx - 0.5).cast(int)
-        # 下面的判断防止的边角的沙子产生爆炸效果
-        # if base[0] < 0 or base[1] < 0 or base[0] >= n_grid - 2 or base[1] >= n_grid - 2:
-        #     continue
         fx = x_s[p] * inv_dx - base.cast(float)
         w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1) ** 2, 0.5 * (fx - 0.5) ** 2]
-
         F_s[p] = (ti.Matrix.identity(float, 2) + dt * C_s[p]) @ F_s[p]
 
         U, sig, V = ti.svd(F_s[p])
-        e = ti.Matrix([[ti.log(sig[0, 0]), 0], [0, ti.log(sig[1, 1])]])
-        new_e, dq = project(e, p)
+        e = ti.Matrix([[ti.log(sig[0, 0]), 0], [0, ti.log(sig[1, 1])]])  # Epsilon定义在论文公式(27)上方
+        new_e, dq = project(e, p)  # dq指代论文中的δqp，公式（29）上方有定义
         hardening(dq, p)
         new_F = U @ ti.Matrix([[ti.exp(new_e[0, 0]), 0], [0, ti.exp(new_e[1, 1])]]) @ V.transpose()
-        vc_s[p] += -ti.log(new_F.determinant()) + ti.log(F_s[p].determinant()) # formula (26)
+        vc_s[p] += -ti.log(new_F.determinant()) + ti.log(F_s[p].determinant()) # 水沙子耦合formula (26)
         F_s[p] = new_F
+        e = new_e
 
         U, sig, V = ti.svd(F_s[p])
         inv_sig = sig.inverse()
-        e = ti.Matrix([[ti.log(sig[0, 0]), 0], [0, ti.log(sig[1, 1])]])
-        stress = U @ (2 * mu_s * inv_sig @ e + lambda_s * e.trace() * inv_sig) @ V.transpose() # formula (25)
-        stress = (-p_vol * 4 * inv_dx * inv_dx) * stress @ F_s[p].transpose()
-        # stress *= h(e)
-        # print(h(e))
+        pd_psi_F = U @ (2 * mu_s * inv_sig @ e + lambda_s * e.trace() * inv_sig) @ V.transpose() # 公式 (26)
+        stress = (-p_vol * 4 * inv_dx * inv_dx) * pd_psi_F @ F_s[p].transpose() # 公式（23）
         affine = s_mass * C_s[p]
         for i, j in ti.static(ti.ndrange(3, 3)):
             offset = ti.Vector([i, j])
