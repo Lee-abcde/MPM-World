@@ -42,8 +42,7 @@ mu_b = 0.75 # coefficient of friction
 pi = 3.14159265358979
 @ti.func
 def project(e0, p):
-    e = e0 + vc_s[p] / d * ti.Matrix.identity(float, 2) # 水沙耦合论文公式（27），volume correction treatment
-
+    e = e0
     ehat = e - e.trace() / d * ti.Matrix.identity(float, 2)  # 公式（27）
     Fnorm = ti.sqrt(ehat[0, 0] ** 2 + ehat[1, 1] ** 2) # Frobenius norm
     yp = Fnorm + (d * lambda_s + 2 * mu_s) / (2 * mu_s) * e.trace() * alpha_s[p] # delta gamma 公式（27）
