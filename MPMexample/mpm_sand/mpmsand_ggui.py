@@ -21,7 +21,7 @@ x_s = ti.Vector.field(2, dtype = float, shape = n_particles) # position
 v_s = ti.Vector.field(2, dtype = float, shape = n_particles) # velocity
 C_s = ti.Matrix.field(2, 2, dtype = float, shape = n_particles) # particle velocity derivative，affine velocity matrix
 F_s = ti.Matrix.field(2, 2, dtype = float, shape = n_particles) # deformation gradient
-phi_s = ti.field(dtype = float, shape = n_particles) # cohesion and saturation
+phi_s = ti.field(dtype = float, shape = n_particles) # cohesion and saturation，定义在水沙耦合论文4.3.3部分
 c_C0 = ti.field(dtype = float, shape = n_particles) # initial cohesion (as maximum)
 vc_s = ti.field(dtype = float, shape = n_particles) # tracks changes in the log of the volume gained during extension
 alpha_s = ti.field(dtype = float, shape = n_particles) # yield surface size
@@ -44,7 +44,7 @@ mu_b = 0.75 # coefficient of friction
 pi = 3.14159265358979
 @ti.func
 def project(e0, p):
-    e = e0 + vc_s[p] / d * ti.Matrix.identity(float, 2) # volume correction treatment
+    e = e0 + vc_s[p] / d * ti.Matrix.identity(float, 2) # 水沙耦合论文公式（27），volume correction treatment
     e += (c_C0[p] * (1.0 - phi_s[p])) / (d * alpha_s[p]) * ti.Matrix.identity(float, 2) # effects of cohesion
 
     ehat = e - e.trace() / d * ti.Matrix.identity(float, 2)  # 公式（27）
@@ -118,10 +118,18 @@ def substep():
 
         normal = ti.Vector.zero(float, 2)
         if grid_sm[i, j] > 0:
-            if i < 3 and grid_sv[i, j][0] < 0:          normal = ti.Vector([1, 0])
-            if i > n_grid - 3 and grid_sv[i, j][0] > 0: normal = ti.Vector([-1, 0])
-            if j < 3 and grid_sv[i, j][1] < 0:          normal = ti.Vector([0, 1])
-            if j > n_grid - 3 and grid_sv[i, j][1] > 0: normal = ti.Vector([0, -1])
+            if i < 3 and grid_sv[i, j][0] < 0:
+                normal = ti.Vector([1, 0])
+                grid_sv[i, j] = ti.Vector([0, 0])
+            if i > n_grid - 3 and grid_sv[i, j][0] > 0:
+                normal = ti.Vector([-1, 0])
+                grid_sv[i, j] = ti.Vector([0, 0])
+            if j < 3 and grid_sv[i, j][1] < 0:
+                normal = ti.Vector([0, 1])
+                grid_sv[i, j] = ti.Vector([0, 0])
+            if j > n_grid - 3 and grid_sv[i, j][1] > 0:
+                normal = ti.Vector([0, -1])
+                grid_sv[i, j] = ti.Vector([0, 0])
         if not (normal[0] == 0 and normal[1] == 0): # Apply friction
             s = grid_sv[i, j].dot(normal)
             if s <= 0:
@@ -134,8 +142,6 @@ def substep():
     # for p in range(n_s_particles):
     for p in x_s:
         base = (x_s[p] * inv_dx - 0.5).cast(int)
-        if base[0] < 0 or base[1] < 0 or base[0] >= n_grid - 2 or base[1] >= n_grid - 2:
-            continue
         fx = x_s[p] * inv_dx - base.cast(float)
         w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1.0) ** 2, 0.5 * (fx - 0.5) ** 2]
         new_v = ti.Vector.zero(float, 2)
