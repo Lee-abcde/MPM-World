@@ -21,7 +21,6 @@ x_s = ti.Vector.field(2, dtype = float, shape = n_particles) # position
 v_s = ti.Vector.field(2, dtype = float, shape = n_particles) # velocity
 C_s = ti.Matrix.field(2, 2, dtype = float, shape = n_particles) # particle velocity derivative，affine velocity matrix
 F_s = ti.Matrix.field(2, 2, dtype = float, shape = n_particles) # deformation gradient
-phi_s = ti.field(dtype = float, shape = n_particles) # cohesion and saturation，定义在水沙耦合论文4.3.3部分
 c_C0 = ti.field(dtype = float, shape = n_particles) # initial cohesion (as maximum)
 vc_s = ti.field(dtype = float, shape = n_particles) # tracks changes in the log of the volume gained during extension
 alpha_s = ti.field(dtype = float, shape = n_particles) # yield surface size
@@ -45,7 +44,7 @@ pi = 3.14159265358979
 @ti.func
 def project(e0, p):
     e = e0 + vc_s[p] / d * ti.Matrix.identity(float, 2) # 水沙耦合论文公式（27），volume correction treatment
-    e += (c_C0[p] * (1.0 - phi_s[p])) / (d * alpha_s[p]) * ti.Matrix.identity(float, 2) # effects of cohesion
+    e += (c_C0[p]) / (d * alpha_s[p]) * ti.Matrix.identity(float, 2) # effects of cohesion
 
     ehat = e - e.trace() / d * ti.Matrix.identity(float, 2)  # 公式（27）
     Fnorm = ti.sqrt(ehat[0, 0] ** 2 + ehat[1, 1] ** 2) # Frobenius norm
