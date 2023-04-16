@@ -9,7 +9,6 @@ ti.init(arch=ti.vulkan)
 quality = 1
 n_particles = 20000 * quality ** 2
 n_s_particles = ti.field(dtype = int, shape = ())
-n_w_particles = ti.field(dtype = int, shape = ())
 n_grid = 128 * quality
 dx, inv_dx = 1 / n_grid, float(n_grid)
 dt = 2e-4 / quality
@@ -161,8 +160,6 @@ def initialize():
         v_s[i] = ti.Matrix([0, 0])
         F_s[i] = ti.Matrix([[1, 0], [0, 1]])
         alpha_s[i] = 0.267765
-
-    n_w_particles[None] = 0
 
 initialize()
 window = ti.ui.Window('Window Title', res = (512, 512), pos = (150, 150))

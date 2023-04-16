@@ -1,3 +1,6 @@
+# 这是通过在粒子上加入浮力，嵌入烟雾模型的MPM算法
+# 会导致一定artifact,因为所有粒子会飞出去最后
+
 import numpy as np
 
 import taichi as ti

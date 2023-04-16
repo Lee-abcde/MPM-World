@@ -1,3 +1,4 @@
+# 通过在MPM网格上增加浮力，从而避免了在粒子上加入浮力
 # written by @Lee-abcde
 import numpy as np
 
