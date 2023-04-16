@@ -20,10 +20,8 @@ x_s = ti.Vector.field(2, dtype = float, shape = n_particles) # position
 v_s = ti.Vector.field(2, dtype = float, shape = n_particles) # velocity
 C_s = ti.Matrix.field(2, 2, dtype = float, shape = n_particles) # particle velocity derivative，affine velocity matrix
 F_s = ti.Matrix.field(2, 2, dtype = float, shape = n_particles) # deformation gradient
-vc_s = ti.field(dtype = float, shape = n_particles) # tracks changes in the log of the volume gained during extension
 alpha_s = ti.field(dtype = float, shape = n_particles) # yield surface size
 q_s = ti.field(dtype = float, shape = n_particles) # harding state
-
 # sand grid properties
 grid_sv = ti.Vector.field(2, dtype = float, shape = (n_grid, n_grid)) # grid node momentum/velocity
 grid_sm = ti.field(dtype = float, shape = (n_grid, n_grid)) # grid node mass
@@ -89,7 +87,6 @@ def substep():
         new_e, dq = project(e, p)  # dq指代论文中的δqp，公式（29）上方有定义
         hardening(dq, p)
         new_F = U @ ti.Matrix([[ti.exp(new_e[0, 0]), 0], [0, ti.exp(new_e[1, 1])]]) @ V.transpose()
-        vc_s[p] += -ti.log(new_F.determinant()) + ti.log(F_s[p].determinant()) # 水沙子耦合formula (26)
         F_s[p] = new_F
         e = new_e
 
