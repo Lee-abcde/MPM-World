@@ -36,10 +36,10 @@ mu_0, lambda_0 = E / (2 * (1 + nu)), E * nu / (
 #   Sand parameters
 s_rho = 400
 s_mass = p_vol * s_rho
-E_s, nu_s = 3.537e5, 0.3 # sand's Young's modulus and Poisson's ratio
+E_s, nu_s = 3.537e5, 0.3  # sand's Young's modulus and Poisson's ratio
 mu_s, lambda_s = E_s / (2 * (1 + nu_s)), E_s * nu_s / ((1 + nu_s) * (1 - 2 * nu_s)) # sand's Lame parameters
 
-mu_b = 0.75 # coefficient of friction
+mu_b = 0.3  # coefficient of friction
 
 pi = 3.14159265358979
 #######################
@@ -101,8 +101,8 @@ h0, h1, h2, h3 = 35, 9, 0.2, 10
 @ti.func
 def sand_hardening(dq, p): # The amount of hardening depends on the amount of correction that occurred due to plasticity
     q_s[p] += dq  # 公式（29）
-    phi = h0 + (h1 * q_s[p] - h3) * ti.exp(-h2 * q_s[p]) # 公式（30）
-    phi = phi / 180 * pi # details in Table. 3: Friction angle phi_F and hardening parameters h0, h1, and h3 are listed in degrees for convenience
+    phi = h0 + (h1 * q_s[p] - h3) * ti.exp(-h2 * q_s[p])  # 公式（30）
+    phi = phi / 180 * pi  # details in Table. 3: Friction angle phi_F and hardening parameters h0, h1, and h3 are listed in degrees for convenience
     sin_phi = ti.sin(phi)
     alpha_s[p] = ti.sqrt(2 / 3) * (2 * sin_phi) / (3 - sin_phi)  # 公式（31）
 
@@ -121,17 +121,9 @@ def substep(g_x: float, g_y: float, g_z: float):
         base = int(Xp - 0.5)
         fx = Xp - base
         w = [0.5 * (1.5 - fx)**2, 0.75 - (fx - 1)**2, 0.5 * (fx - 0.5)**2]
-
         F_dg[p] = (ti.Matrix.identity(float, 3) + dt * F_C[p]) @ F_dg[p]  # deformation gradient update
-        # Hardening coefficient: snow gets harder when compressed
-        h = ti.exp(10 * (1.0 - F_Jp[p]))
-        if F_materials[p] == JELLY:  # jelly, make it softer
-            h = 0.3
-        mu, la = mu_0 * h, lambda_0 * h
-        if F_materials[p] == WATER or F_materials[p] == SMOKE:  # liquid
-            mu = 0.0
 
-        affine = ti.zero(F_C[p])
+        affine = ti.Matrix.zero(float, dim, dim)
         if F_materials[p] == SAND:
             U, sig, V = ti.svd(F_dg[p])
             e = ti.Matrix([[ti.log(sig[0, 0]), 0, 0], [0, ti.log(sig[1, 1]), 0],
@@ -142,12 +134,21 @@ def substep(g_x: float, g_y: float, g_z: float):
                 [[ti.exp(new_e[0, 0]), 0, 0], [0, ti.exp(new_e[1, 1]), 0], [0, 0, ti.exp(new_e[2, 2])]]) @ V.transpose()
             F_dg[p] = new_F
             e = new_e
+
             U, sig, V = ti.svd(F_dg[p])
             inv_sig = sig.inverse()
             pd_psi_F = U @ (2 * mu_s * inv_sig @ e + lambda_s * e.trace() * inv_sig) @ V.transpose()  # 公式 (26)
             stress = (-p_vol * 4 * inv_dx * inv_dx) * pd_psi_F @ F_dg[p].transpose()  # 公式（23）
             affine = dt * stress + s_mass * F_C[p]
         else:
+            # Hardening coefficient: snow gets harder when compressed
+            h = ti.exp(10 * (1.0 - F_Jp[p]))
+            if F_materials[p] == JELLY:  # jelly, make it softer
+                h = 0.3
+            mu, la = mu_0 * h, lambda_0 * h
+            if F_materials[p] == WATER or F_materials[p] == SMOKE:  # liquid
+                mu = 0.0
+
             U, sig, V = ti.svd(F_dg[p])
             J = 1.0
             for d in ti.static(range(3)):
@@ -184,6 +185,19 @@ def substep(g_x: float, g_y: float, g_z: float):
                 # F_grid_v[base +
                 #          offset] += weight * (p_mass * F_v[p] + affine @ dpos)
                 # F_grid_m[base + offset] += weight * p_mass
+        elif F_materials[p] == SAND:
+            for offset in ti.static(ti.grouped(ti.ndrange(*neighbour))):
+                dpos = (offset - fx) * dx
+                weight = 1.0
+                for i in ti.static(range(dim)):
+                    weight *= w[offset[i]][i]
+                F_grid_v[base +
+                         offset] += weight * (s_mass * F_v[p] + affine @ dpos)
+                F_grid_m[base + offset] += weight * s_mass
+                # 注释掉下面两行会失去烟雾的耦合，速度会提升10fps
+                S_grid_v[base +
+                         offset] += weight * (p_mass * F_v[p] + affine @ dpos)
+                S_grid_m[base + offset] += weight * p_mass
         else:
             for offset in ti.static(ti.grouped(ti.ndrange(*neighbour))):
                 dpos = (offset - fx) * dx
@@ -203,14 +217,34 @@ def substep(g_x: float, g_y: float, g_z: float):
         if F_grid_m[I] > 0:
             F_grid_v[I] /= F_grid_m[I]
         F_grid_v[I] += dt * ti.Vector([g_x, g_y, g_z])
+        normal = ti.Vector.zero(float, dim)
+
+        if I[0] < bound and F_grid_v[I][0] < 0:
+            normal = ti.Vector([1, 0, 0])
+        if I[0] > n_grid - bound and F_grid_v[I][0] > 0:
+            normal = ti.Vector([-1, 0, 0])
+        if I[1] < bound and F_grid_v[I][1] < 0:
+            normal = ti.Vector([0, 1, 0])
+        if I[1] > n_grid - bound and F_grid_v[I][1] > 0:
+            normal = ti.Vector([0, -1, 0])
+        if I[2] < bound and F_grid_v[I][2] < 0:
+            normal = ti.Vector([0, 0, 1])
+        if I[2] > n_grid - bound and F_grid_v[I][2] > 0:
+            normal = ti.Vector([0, 0, -1])
+        if not (normal[0] == 0 and normal[1] == 0 and normal[2] == 0): # Apply friction
+            s = F_grid_v[I].dot(normal)
+            if s <= 0:
+                v_normal = s * normal
+                v_tangent = F_grid_v[I] - v_normal # divide velocity into normal and tangential parts
+                vt = v_tangent.norm()
+                if vt > 1e-12: F_grid_v[I] = v_tangent - (vt if vt < -mu_b * s else -mu_b * s) * (v_tangent / vt) # The Coulomb friction law
         grid.boundary_separate(I, F_grid_v, n_grid, bound)
 
     for I in ti.grouped(S_grid_m):
         if S_grid_m[I] > 0:
             S_grid_v[I] /= S_grid_m[I]
         S_grid_v[I] -= dt * ti.Vector([g_x, g_y, g_z])
-        if S_grid_v[I][1] < 0:
-            S_grid_v[I][1] *= 0.8
+        grid.boundary_separate(I, S_grid_v, n_grid, bound)
 
     for I in ti.grouped(S_grid_m):
         S_grid_c[I] = material.Curl_cal(I, S_grid_v)
@@ -279,20 +313,19 @@ def init():
 
 @ti.kernel
 def init_sand():
-    group_size = n_particles // 4
+    group_size = n_particles // 5
     for i in range(n_particles):
         F_x[i] = [
-            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size),
-            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size),
-            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size)
+            ti.random() * 0.15 + 0.7 - 0.15 * (i // group_size),
+            ti.random() * 0.15 + 0.7 - 0.15 * (i // group_size),
+            ti.random() * 0.15 + 0.7 - 0.15 * (i // group_size)
         ]
         F_v[i] = ti.Vector([0, 0, 0])
         F_C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
         F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
         F_Jp[i] = 1
         alpha_s[i] = 0.267765
-        F_materials[i] = 4  # 0: fluid 1: jelly 2: snow 3:smoke 4:sand
-
+        F_materials[i] = (i // group_size)  # 0: fluid 1: jelly 2: snow 3:smoke 4:sand
 
 
 res = (1080, 720)
