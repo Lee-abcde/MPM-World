@@ -8,7 +8,6 @@ ti.init(arch=ti.vulkan)
 
 quality = 1
 n_particles = 20000 * quality ** 2
-n_s_particles = ti.field(dtype = int, shape = ())
 n_grid = 128 * quality
 dx, inv_dx = 1 / n_grid, float(n_grid)
 dt = 2e-4 / quality
@@ -29,12 +28,12 @@ grid_sm = ti.field(dtype = float, shape = (n_grid, n_grid)) # grid node mass
 
 # constant values
 p_vol, s_rho = (dx * 0.5) ** 2, 400
-s_mass= p_vol * s_rho
+s_mass = p_vol * s_rho
 
 E_s, nu_s = 3.537e5, 0.3 # sand's Young's modulus and Poisson's ratio
 mu_s, lambda_s = E_s / (2 * (1 + nu_s)), E_s * nu_s / ((1 + nu_s) * (1 - 2 * nu_s)) # sand's Lame parameters
 
-mu_b = 0.75 # coefficient of friction
+mu_b = 0.75  # coefficient of friction
 
 pi = 3.14159265358979
 @ti.func
@@ -151,7 +150,6 @@ def substep():
 
 @ti.kernel
 def initialize():
-    n_s_particles[None] = 10000 * quality ** 2
     for i in x_s:
         x_s[i] = [ti.random() * 0.25 + 0.4, ti.random() * 0.4 + 0.2]
         v_s[i] = ti.Matrix([0, 0])
