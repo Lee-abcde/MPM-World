@@ -33,9 +33,13 @@ nu = 0.2  #  Poisson's ratio
 mu_0, lambda_0 = E / (2 * (1 + nu)), E * nu / (
     (1 + nu) * (1 - 2 * nu))  # Lame parameters
 
+#   Smoke parameters
+smoke_rho = 0.15
+smoke_mass = p_vol * smoke_rho
+
 #   Sand parameters
-s_rho = 400
-s_mass = p_vol * s_rho
+sand_rho = 400
+sand_mass = p_vol * sand_rho
 E_s, nu_s = 3.537e5, 0.3  # sand's Young's modulus and Poisson's ratio
 mu_s, lambda_s = E_s / (2 * (1 + nu_s)), E_s * nu_s / ((1 + nu_s) * (1 - 2 * nu_s)) # sand's Lame parameters
 
@@ -139,7 +143,7 @@ def substep(g_x: float, g_y: float, g_z: float):
             inv_sig = sig.inverse()
             pd_psi_F = U @ (2 * mu_s * inv_sig @ e + lambda_s * e.trace() * inv_sig) @ V.transpose()  # 公式 (26)
             stress = (-p_vol * 4 * inv_dx * inv_dx) * pd_psi_F @ F_dg[p].transpose()  # 公式（23）
-            affine = dt * stress + s_mass * F_C[p]
+            affine = dt * stress + sand_mass * F_C[p]
         else:
             # Hardening coefficient: snow gets harder when compressed
             h = ti.exp(10 * (1.0 - F_Jp[p]))
@@ -170,7 +174,10 @@ def substep(g_x: float, g_y: float, g_z: float):
             stress = 2 * mu * (F_dg[p] - U @ V.transpose()) @ F_dg[p].transpose(
             ) + ti.Matrix.identity(float, 3) * la * J * (J - 1)
             stress = (-dt * p_vol * 4) * stress / dx**2
-            affine = stress + p_mass * F_C[p]
+            if F_materials[p] == SMOKE:
+                affine = stress + smoke_mass * F_C[p]
+            else:
+                affine = stress + p_mass * F_C[p]
 
         if F_materials[p] == SMOKE:
             for offset in ti.static(ti.grouped(ti.ndrange(*neighbour))):
@@ -179,8 +186,8 @@ def substep(g_x: float, g_y: float, g_z: float):
                 for i in ti.static(range(dim)):
                     weight *= w[offset[i]][i]
                 S_grid_v[base +
-                         offset] += weight * (p_mass * F_v[p] + affine @ dpos)
-                S_grid_m[base + offset] += weight * p_mass
+                         offset] += weight * (smoke_mass * F_v[p] + affine @ dpos)
+                S_grid_m[base + offset] += weight * smoke_mass
                 # 注释该部分代码实现单向的耦合，烟雾不会影响其他物质的运动
                 # F_grid_v[base +
                 #          offset] += weight * (p_mass * F_v[p] + affine @ dpos)
@@ -192,8 +199,8 @@ def substep(g_x: float, g_y: float, g_z: float):
                 for i in ti.static(range(dim)):
                     weight *= w[offset[i]][i]
                 F_grid_v[base +
-                         offset] += weight * (s_mass * F_v[p] + affine @ dpos)
-                F_grid_m[base + offset] += weight * s_mass
+                         offset] += weight * (sand_mass * F_v[p] + affine @ dpos)
+                F_grid_m[base + offset] += weight * sand_mass
                 # 注释掉下面两行会失去烟雾的耦合，速度会提升10fps
                 S_grid_v[base +
                          offset] += weight * (p_mass * F_v[p] + affine @ dpos)
@@ -243,7 +250,7 @@ def substep(g_x: float, g_y: float, g_z: float):
     for I in ti.grouped(S_grid_m):
         if S_grid_m[I] > 0:
             S_grid_v[I] /= S_grid_m[I]
-        S_grid_v[I] -= dt * ti.Vector([g_x, g_y, g_z])
+        S_grid_v[I] -= 4 * dt * ti.Vector([g_x, g_y, g_z])
         grid.boundary_separate(I, S_grid_v, n_grid, bound)
 
     for I in ti.grouped(S_grid_m):
