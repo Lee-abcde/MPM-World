@@ -3,9 +3,6 @@
 import numpy as np
 
 import taichi as ti
-
-import src.material as material
-import src.grid as grid
 arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=arch)
 
@@ -150,7 +147,35 @@ def substep(g_x: float, g_y: float, g_z: float):
         if F_grid_m[I] > 0:
             F_grid_v[I] /= F_grid_m[I]
         F_grid_v[I] += dt * ti.Vector([g_x, g_y, g_z])
-        grid.boundary_separate(I, F_grid_v, n_grid, bound)
+
+        normal = ti.Vector.zero(float, dim)
+        if F_grid_m[I] > 0:
+            if I[0] < bound and F_grid_v[I][0] < 0:
+                normal = ti.Vector([1, 0, 0])
+                F_grid_v[I] = ti.Vector([0, 0, 0])
+            if I[0] > n_grid - bound and F_grid_v[I][0] > 0:
+                normal = ti.Vector([-1, 0, 0])
+                F_grid_v[I] = ti.Vector([0, 0, 0])
+            if I[1] < bound and F_grid_v[I][1] < 0:
+                normal = ti.Vector([0, 1, 0])
+                F_grid_v[I] = ti.Vector([0, 0, 0])
+            if I[1] > n_grid - bound and F_grid_v[I][1] > 0:
+                normal = ti.Vector([0, -1, 0])
+                F_grid_v[I] = ti.Vector([0, 0, 0])
+            if I[2] < bound and F_grid_v[I][2] < 0:
+                normal = ti.Vector([0, 0, 1])
+                F_grid_v[I] = ti.Vector([0, 0, 0])
+            if I[2] > n_grid - bound and F_grid_v[I][2] > 0:
+                normal = ti.Vector([0, 0, -1])
+                F_grid_v[I] = ti.Vector([0, 0, 0])
+        if not (normal[0] == 0 and normal[1] == 0 and normal[2] == 0): # Apply friction
+            s = F_grid_v[I].dot(normal)
+            if s <= 0:
+                v_normal = s * normal
+                v_tangent = F_grid_v[I] - v_normal # divide velocity into normal and tangential parts
+                vt = v_tangent.norm()
+                if vt > 1e-12: F_grid_v[I] = v_tangent - (vt if vt < -mu_b * s else -mu_b * s) * (v_tangent / vt) # The Coulomb friction law
+
 
     # Step3: Grid to particle (G2P)
     ti.loop_config(block_dim=n_grid)
@@ -189,26 +214,26 @@ material_colors = [(0.1, 0.6, 0.9), (0.93, 0.33, 0.23), (1.0, 1.0, 1.0), (0.5, 0
 
 @ti.kernel
 def init_sand():
-    group_size = n_particles // 4
-    for i in range(n_particles):
-        F_x[i] = [
-            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size),
-            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size),
-            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size)
-        ]
-        F_v[i] = ti.Vector([0, 0, 0])
-        F_C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
-        F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-        F_Jp[i] = 1
-        alpha_s[i] = 0.267765
-        F_materials[i] = 4  # 0: fluid 1: jelly 2: snow 3:smoke 4:sand
-
-    # for i in F_x:
-    #     F_x[i] = [ti.random() * 0.25 + 0.4, ti.random() * 0.4 + 0.2,ti.random() * 0.25 + 0.2]
-    #     F_v[i] = ti.Matrix([0, 0, 0])
+    # group_size = n_particles // 4
+    # for i in range(n_particles):
+    #     F_x[i] = [
+    #         ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size),
+    #         ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size),
+    #         ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size)
+    #     ]
+    #     F_v[i] = ti.Vector([0, 0, 0])
+    #     F_C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
     #     F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    #     F_Jp[i] = 1
     #     alpha_s[i] = 0.267765
     #     F_materials[i] = 4  # 0: fluid 1: jelly 2: snow 3:smoke 4:sand
+
+    for i in F_x:
+        F_x[i] = [ti.random() * 0.25 + 0.4, ti.random() * 0.4 + 0.2,ti.random() * 0.25 + 0.2]
+        F_v[i] = ti.Matrix([0, 0, 0])
+        F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+        alpha_s[i] = 0.267765
+        F_materials[i] = 4  # 0: fluid 1: jelly 2: snow 3:smoke 4:sand
 
 
 
