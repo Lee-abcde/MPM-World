@@ -149,25 +149,19 @@ def substep(g_x: float, g_y: float, g_z: float):
         F_grid_v[I] += dt * ti.Vector([g_x, g_y, g_z])
 
         normal = ti.Vector.zero(float, dim)
-        if F_grid_m[I] > 0:
-            if I[0] < bound and F_grid_v[I][0] < 0:
-                normal = ti.Vector([1, 0, 0])
-                F_grid_v[I] = ti.Vector([0, 0, 0])
-            if I[0] > n_grid - bound and F_grid_v[I][0] > 0:
-                normal = ti.Vector([-1, 0, 0])
-                F_grid_v[I] = ti.Vector([0, 0, 0])
-            if I[1] < bound and F_grid_v[I][1] < 0:
-                normal = ti.Vector([0, 1, 0])
-                F_grid_v[I] = ti.Vector([0, 0, 0])
-            if I[1] > n_grid - bound and F_grid_v[I][1] > 0:
-                normal = ti.Vector([0, -1, 0])
-                F_grid_v[I] = ti.Vector([0, 0, 0])
-            if I[2] < bound and F_grid_v[I][2] < 0:
-                normal = ti.Vector([0, 0, 1])
-                F_grid_v[I] = ti.Vector([0, 0, 0])
-            if I[2] > n_grid - bound and F_grid_v[I][2] > 0:
-                normal = ti.Vector([0, 0, -1])
-                F_grid_v[I] = ti.Vector([0, 0, 0])
+        if I[0] < bound and F_grid_v[I][0] < 0:
+            normal = ti.Vector([1, 0, 0])
+        if I[0] > n_grid - bound and F_grid_v[I][0] > 0:
+            normal = ti.Vector([-1, 0, 0])
+        if I[1] < bound and F_grid_v[I][1] < 0:
+            normal = ti.Vector([0, 1, 0])
+        if I[1] > n_grid - bound and F_grid_v[I][1] > 0:
+            normal = ti.Vector([0, -1, 0])
+        if I[2] < bound and F_grid_v[I][2] < 0:
+            normal = ti.Vector([0, 0, 1])
+        if I[2] > n_grid - bound and F_grid_v[I][2] > 0:
+            normal = ti.Vector([0, 0, -1])
+
         if not (normal[0] == 0 and normal[1] == 0 and normal[2] == 0): # Apply friction
             s = F_grid_v[I].dot(normal)
             if s <= 0:
