@@ -20,9 +20,14 @@ print(n_particles)
 
 dx = 1 / n_grid
 
+
+
 p_rho = 1
 p_vol = (dx * 0.5)**2
 p_mass = p_vol * p_rho
+# smoke parameters
+smoke_rho = 0.2
+smoke_mass = p_vol * smoke_rho
 GRAVITY = [0, -9.8, 0]
 bound = 3
 E = 1000  # Young's modulus
@@ -93,7 +98,13 @@ def substep(g_x: float, g_y: float, g_z: float):
         stress = 2 * mu * (F_dg[p] - U @ V.transpose()) @ F_dg[p].transpose(
         ) + ti.Matrix.identity(float, 3) * la * J * (J - 1)
         stress = (-dt * p_vol * 4) * stress / dx**2
-        affine = stress + p_mass * F_C[p]
+
+        material_mass = 0.
+        if F_materials[p] == SMOKE:
+            material_mass = smoke_mass
+        else:
+            material_mass = p_mass
+        affine = stress + material_mass * F_C[p]
 
         for offset in ti.static(ti.grouped(ti.ndrange(*neighbour))):
             dpos = (offset - fx) * dx
@@ -101,8 +112,8 @@ def substep(g_x: float, g_y: float, g_z: float):
             for i in ti.static(range(dim)):
                 weight *= w[offset[i]][i]
             F_grid_v[base +
-                     offset] += weight * (p_mass * F_v[p] + affine @ dpos)
-            F_grid_m[base + offset] += weight * p_mass
+                     offset] += weight * (material_mass * F_v[p] + affine @ dpos)
+            F_grid_m[base + offset] += weight * material_mass
 
     for I in ti.grouped(F_grid_m):
         if F_grid_m[I] > 0:
@@ -131,8 +142,6 @@ def substep(g_x: float, g_y: float, g_z: float):
         if F_materials[p] == SMOKE:
             buoyancy = -19.8
             F_v[p] -= dt * (ti.Vector([0, buoyancy, 0]) + ti.Vector(GRAVITY))
-            if F_v[p][1] < 0:
-                F_v[p][1] *= 0.8
         F_x[p] += dt * F_v[p]
         F_C[p] = new_C
 
