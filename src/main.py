@@ -299,27 +299,12 @@ def set_color_by_material(mat_color: ti.types.ndarray()):
 
 
 
-particles_radius = 0.003
+particles_radius = 0.004
 
 material_colors = [(0.1, 0.6, 0.9), (0.93, 0.33, 0.23), (1.0, 1.0, 1.0), (0.5, 0.5, 0.5), (0.4, 0.3, 0.2)]
 
 @ti.kernel
 def init():
-    group_size = n_particles // 4
-    for i in range(n_particles):
-        F_x[i] = [
-            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size),
-            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size),
-            ti.random() * 0.2 + 0.7 - 0.2 * (i // group_size)
-        ]
-        F_v[i] = ti.Vector([0, 0, 0])
-        F_C[i] = ti.Matrix([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
-        F_dg[i] = ti.Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-        F_Jp[i] = 1
-        F_materials[i] = (i // group_size)  # 0: fluid 1: jelly 2: snow 3:smoke 4:sand
-
-@ti.kernel
-def init_sand():
     group_size = n_particles // 5
     for i in range(n_particles):
         F_x[i] = [
@@ -334,7 +319,6 @@ def init_sand():
         alpha_s[i] = 0.267765
         F_materials[i] = (i // group_size)  # 0: fluid 1: jelly 2: snow 3:smoke 4:sand
 
-
 res = (1080, 720)
 window = ti.ui.Window("Real MPM 3D", res, vsync=True)
 
@@ -348,7 +332,7 @@ camera.fov(55)
 
 
 def show_options():
-        set_color_by_material(np.array(material_colors, dtype=np.float32))
+    set_color_by_material(np.array(material_colors, dtype=np.float32))
 def render():
     camera.track_user_inputs(window, movement_speed=0.03, hold_key=ti.ui.RMB)
     scene.set_camera(camera)
@@ -365,7 +349,7 @@ def render():
 
 
 def main():
-    init_sand()
+    init()
     show_options()
     while window.running:
         for _ in range(steps):
