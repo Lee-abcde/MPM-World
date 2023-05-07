@@ -2,7 +2,6 @@
 import taichi as ti
 import taichi.math as tm
 import src.material as material
-import src.grid as grid
 
 ti.init(arch=ti.gpu)
 
@@ -39,7 +38,7 @@ def substep():
         fx = Xp - base
         w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1) ** 2, 0.5 * (fx - 0.5) ** 2]
         # Lec8 P17
-        fluid_pressure = ti.max(B * ((1/J[p])**7 - 1), 0)
+        fluid_pressure = ti.max(B * (1-J[p]), 0)
         cauchy_stress = fluid_pressure * ti.Matrix.identity(float, 2)
         # Lec8 P11
         force = -4 / dx ** 2 * p_vol * cauchy_stress  # 注意液体的情况下PK1数值上=cauchy_stress，因为默认液滴的形变梯度为J*I(identity matrix),还差一个wi（xi-xp）放到循环中计算

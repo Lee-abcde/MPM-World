@@ -10,6 +10,7 @@ MPM-World is an open-source MPM engine for the physically-based simulation of fl
 * ~~学习并实现沙子的仿真（高优先级）~~  （finished on 17/04/2023)
 * ~~调整烟雾的密度，然后在粒子上面尝试增加浮力是否可行,不可行~~
 * 实现水体烟雾的压强projection （高优先级）
+* 网格法回差值的时候似乎没有考虑质量影响，对于密度低的颗粒可能出错
 * 整合加入拉格朗日力的解算
 * 跑benchmark进行结果分析（高优先级）
 * 粒子渲染（高优先级）
