@@ -106,7 +106,7 @@ def main():
         for s in range(50):
             substep()
         canvas.set_background_color(color=(1, 1, 1))
-        canvas.circles(x, radius=0.004, color=(0.8, 0.8, 0.8))
+        canvas.circles(x, radius=0.002, color=(0.8, 0.8, 0.8))
         window.show()
     # gui = ti.GUI('MPM88',(500, 500))
     # while gui.running and not gui.get_event(gui.ESCAPE):
