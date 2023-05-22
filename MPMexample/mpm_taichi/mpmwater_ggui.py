@@ -39,6 +39,7 @@ def substep():
         w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1) ** 2, 0.5 * (fx - 0.5) ** 2]
         # Lec8 P17
         fluid_pressure = ti.max(B * ((1/J[p])**7-1), 0)
+        # fluid_pressure = ti.max(B * (1-J[p]), 0)
         cauchy_stress = fluid_pressure * ti.Matrix.identity(float, 2)
         # Lec8 P11
         force = -4 / dx ** 2 * p_vol * cauchy_stress  # 注意液体的情况下PK1数值上=cauchy_stress，因为默认液滴的形变梯度为J*I(identity matrix),还差一个wi（xi-xp）放到循环中计算
@@ -67,8 +68,10 @@ def substep():
             grid_v[i, j].y = 0
         if j > n_grid - bound and grid_v[i, j].y > 0:
             grid_v[i, j].y = 0
+    avg_height  = 0
     for p in x:
         Xp = x[p] / dx
+        avg_height += Xp[1]
         base = int(Xp - 0.5)
         fx = Xp - base
         w = [0.5 * (1.5 - fx) ** 2, 0.75 - (fx - 1) ** 2, 0.5 * (fx - 0.5) ** 2]
@@ -85,7 +88,7 @@ def substep():
         x[p] += dt * v[p]
         J[p] *= 1 + dt * new_C.trace()  # C矩阵c00,c11会导致体积发生变化
         C[p] = new_C
-
+    # print(avg_height/n_particles*58/1228.8*100.,"%")
 
 @ti.kernel
 def init():
@@ -99,11 +102,15 @@ def main():
     init()
     window = ti.ui.Window('MPM88', res=(512, 512), vsync=True)
     canvas = window.get_canvas()
+
+    frame = 0
     while window.running:
         for e in window.get_events(ti.ui.PRESS):
             if e.key == ti.ui.ESCAPE:
                 window.running = False
         for s in range(50):
+            # print(frame)
+            frame+=1
             substep()
         canvas.set_background_color(color=(1, 1, 1))
         canvas.circles(x, radius=0.004, color=(0.39, 0.772, 1.))
