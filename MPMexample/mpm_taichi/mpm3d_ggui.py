@@ -8,8 +8,8 @@ ti.init(arch=arch)
 #dim, n_grid, steps, dt = 2, 128, 20, 2e-4
 #dim, n_grid, steps, dt = 2, 256, 32, 1e-4
 # dim, n_grid, steps, dt = 3, 32, 25, 4e-4
-# dim, n_grid, steps, dt = 3, 64, 25, 2e-4
-dim, n_grid, steps, dt = 3, 128, 5, 1e-4
+dim, n_grid, steps, dt = 3, 64, 25, 2e-4
+# dim, n_grid, steps, dt = 3, 128, 5, 1e-4
 
 n_particles = n_grid**dim // 2**(dim - 1)
 
@@ -203,7 +203,7 @@ def set_color_by_material(mat_color: ti.types.ndarray()):
 print("Loading presets...this might take a minute")
 
 presets = [[
-    CubeVolume(ti.Vector([0.55, 0.05, 0.55]), ti.Vector([0.4, 0.4, 0.4]),
+    CubeVolume(ti.Vector([0.55, 0.25, 0.55]), ti.Vector([0.4, 0.4, 0.4]),
                WATER),
 ],
            [
